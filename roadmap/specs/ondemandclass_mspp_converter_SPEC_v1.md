@@ -1,5 +1,5 @@
 # オンデマンドスライドコンバーター 仕様書 v1
-### （Tauri / Bun / TypeScript / Svelte 版）
+### （Tauri / Bun / TypeScript / SvelteKit 版）
 
 対象読者：このツールを実装するエンジニア（Claude Code含む）
 
@@ -20,8 +20,13 @@ PowerPoint（.pptx）のみをClassroomで配布する形式を取る。この p
 文字起こし（Comulytic / Whisper）にも一次資料としてのPDF化にも使えない。
 
 ### 目的
-pptxファイル1つをアプリにドラッグ＆ドロップするだけで、以下3種の
-成果物を**元のpptxと同じディレクトリ**に自動生成する。
+pptxファイル（またはppsxファイル）1つをアプリにドラッグ＆ドロップするだけで、以下3種の
+成果物を**元のファイルと同じディレクトリ**に自動生成する。
+
+- ppsx（PowerPointスライドショー形式）はpptxと同一のOOXML構造（`ppt/presentation.xml`
+  以下）を持ち、差異は`[Content_Types].xml`のメインパートContent Typeのみであるため、
+  以降の処理はpptxと共通とする。本仕様中の「pptx」は特記なき限りpptx/ppsxの両方を指す。
+- `<basename>` は入力ファイル名から拡張子（`.pptx` / `.ppsx`）を除いたもの。
 
 1. `<basename>_audio.m4a` … スライド順に結合されたナレーション音声（結合音声）
 2. `<basename>_slides.pdf` … スライド内容をそのまま書き出したテキスト層付きPDF（OCR不要）
@@ -40,8 +45,8 @@ pptxファイル1つをアプリにドラッグ＆ドロップするだけで、
 - 監視フォルダ等による自動実行（フォルダにpptxが追加されたら自動変換
   される、等）は実装しない。**常にユーザーのドラッグ＆ドロップ操作を
   トリガーとする。**
-- pptx以外の形式（.ppt / .key / Google スライド等）への対応は本仕様の
-  対象外とする。将来拡張の余地は残すが、v1では pptx 専用とする。
+- pptx/ppsx以外の形式（.ppt / .pps / .pptm / .key / Google スライド等）への対応は本仕様の
+  対象外とする。将来拡張の余地は残すが、v1では pptx/ppsx 専用とする。
 
 ---
 
@@ -52,7 +57,7 @@ pptxファイル1つをアプリにドラッグ＆ドロップするだけで、
 | デスクトップシェル | Tauri v2 | Rustバックエンド＋Webviewフロントエンドのハイブリッドアプリ |
 | パッケージ管理／スクリプト実行 | Bun | `bun install` / `bun run tauri dev` 等 |
 | 言語（フロント） | TypeScript | 型安全なUIロジック |
-| UIフレームワーク | Svelte（Svelte単体、SvelteKit不要） | 軽量な状態機械的UI記述 |
+| UIフレームワーク | SvelteKit（Svelte 5、`@sveltejs/adapter-static`によるSPA構成） | 軽量な状態機械的UI記述 |
 | pptx（zip）展開 | Rust `zip` crate | ppt/配下のXML・メディアファイルの取り出し |
 | XML解析 | Rust `quick-xml` crate | `presentation.xml` / `slideN.xml` / 各`*.rels` の解析 |
 | 音声結合 | ffmpeg（外部プロセス起動） | スライド順に並べた音声のconcat結合 |
@@ -64,6 +69,14 @@ pptxファイル1つをアプリにドラッグ＆ドロップするだけで、
 対象OSはWindowsを主とする（`archive_workflow.md`のツール群と同一環境）。
 LibreOffice・ffmpegはユーザー環境に事前インストール済みであることを
 前提とし、パスは設定ファイルで指定可能にする（4章参照）。
+
+SvelteKitはTauriのWebview内で静的ファイルとして動作させるため、以下を必須とする。
+
+- `@sveltejs/adapter-static` を使用し、`fallback: "index.html"` を指定する
+- ルートの `src/routes/+layout.ts` で `export const ssr = false;` とする
+  （Tauri APIはブラウザ環境でのみ動作するため、SSRを無効化する）
+- ルーティングは単一ページ（`src/routes/+page.svelte`）のみとし、画面遷移は
+  URLではなく `pipelineState.view` で切り替える（7章）
 
 ---
 
@@ -123,23 +136,27 @@ ondemandclass_mspp_converter/
 │  │  └─ default.json               # 権限定義（6章）
 │  └─ tauri.conf.json
 ├─ src/
+│  ├─ routes/
+│  │  ├─ +layout.ts                 # export const ssr = false;（SPA化）
+│  │  └─ +page.svelte               # Wizard.svelte を配置するだけの唯一のページ
 │  ├─ lib/
 │  │  ├─ steps/
 │  │  │  ├─ types.ts                # PipelineState, StepResult, SlideAudioMap
 │  │  │  ├─ extractPptxStep.ts
 │  │  │  ├─ audioConcatStep.ts
-│  │  │  └─ slidePdfStep.ts
+│  │  │  ├─ slidePdfStep.ts
 │  │  │  └─ timestampJsonStep.ts
+│  │  ├─ components/
+│  │  │  ├─ DropZone.svelte         # idle画面。pptx/ppsxのD&D受付
+│  │  │  ├─ Wizard.svelte           # pipelineState.viewで出し分けるだけ
+│  │  │  ├─ ProcessingView.svelte   # 各StepResultを逐次ログ表示
+│  │  │  └─ ResultView.svelte       # 生成物3種へのパス表示・フォルダを開くボタン
 │  │  ├─ orchestrator.ts            # PipelineOrchestrator
 │  │  ├─ pipelineStore.ts           # writable<PipelineState>
 │  │  └─ settings.ts                # ffmpeg/soffice実行パスの読み込み（4.2）
-│  ├─ components/
-│  │  ├─ DropZone.svelte            # idle画面。pptxのD&D受付
-│  │  ├─ Wizard.svelte              # pipelineState.viewで出し分けるだけ
-│  │  ├─ ProcessingView.svelte      # 各StepResultを逐次ログ表示
-│  │  └─ ResultView.svelte          # 生成物3種へのパス表示・フォルダを開くボタン
-│  ├─ App.svelte
-│  └─ main.ts
+│  └─ app.html
+├─ svelte.config.js                  # adapter-static（fallback: "index.html"）
+├─ vite.config.ts
 ├─ app.settings.json                 # ffmpeg/soffice実行パス等（4.2、要gitignore対象外＝サンプルのみコミット）
 ├─ app.settings.example.json
 ├─ package.json
@@ -331,8 +348,9 @@ export const pipelineState = writable<PipelineState>({ view: "idle" });
 
 ### `DropZone.svelte`
 - `$pipelineState.view === "idle"` のときのみ表示
-- Tauri v2 標準の `onDragDropEvent` をリッスンし、拡張子が `.pptx` の
-  ファイルのみを受け付ける（それ以外はエラー表示のうえ `idle` のまま）
+- Tauri v2 標準の `onDragDropEvent` をリッスンし、拡張子が `.pptx` または
+  `.ppsx` のファイルのみを受け付ける（大文字小文字は区別しない。それ以外は
+  エラー表示のうえ `idle` のまま）
 - 受付時：`pipelineState.set({ view: "processing", pptxPath, results: [] })`
   としたのち `PipelineOrchestrator.run()` を呼び出す
 
@@ -432,7 +450,7 @@ bun run tauri build
 ## 12. 受け入れ基準（Acceptance Criteria）
 
 - [ ] アプリ起動直後はドロップゾーンのみが表示される（idle画面）
-- [ ] pptxファイルをドロップすると自動的に処理が開始し、
+- [ ] pptxファイルまたはppsxファイルをドロップすると自動的に処理が開始し、
       `ExtractPptxStep` → （`AudioConcatStep` と `SlidePdfStep` を並行実行）
       → `TimestampJsonStep` の順でログが表示される
 - [ ] 生成される3ファイルが元pptxと同じディレクトリに
@@ -490,3 +508,7 @@ bun run tauri build
   結果（フォント埋め込み・図形の表示崩れ）が変わることがあるため、
   実際に配布されるpptxのフォント・図形要素を用いた動作確認を
   実装後に必ず行うこと
+- ppsxはLibreOfficeでは「自動再生」用のインポートフィルタで開かれるため、
+  `--headless --convert-to pdf` がpptxと同様にPDFを出力することを、
+  実装初期に実ファイルで確認すること（出力されない場合は入力フィルタを
+  明示指定する等で対処する）
