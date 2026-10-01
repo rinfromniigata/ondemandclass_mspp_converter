@@ -1,10 +1,12 @@
-# 実装設計（imple）: 初期アーキテクチャ
+# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v1.md`
-- 対応tasks: `roadmap/planning_dialog/260930203323_tasks_initial_implementation.md`
-- 対応walk: `roadmap/planning_dialog/260930203357_walk_initial_implementation.md`
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
+- 対応tasks: `roadmap/planning_dialog/261001133406_tasks_design_system_integration.md`
+- 対応walk: `roadmap/planning_dialog/261001133444_walk_design_system_integration.md`
+- 前版: `roadmap/archived/260930203148_imple_initial_architecture.md`
+- 変更理由: `roadmap/development/261001132402_change_design_system.md`
 
-本書はスペックシートの5〜7章を実装単位に分解し、モジュールの責務・インターフェース・
+本書はスペックシートの3章・6〜8章を実装単位に分解し、モジュールの責務・インターフェース・
 内部処理の方針を定める。スペックと食い違う場合はスペックを正とし、本書を修正する。
 
 ---
@@ -19,13 +21,17 @@
      単体テストの対象にする
 2. **TypeScriptは制御フローのみ**
    - Rust呼び出しは `tauriCommands.ts` に集約し、Step・Orchestrator・Controllerはそれ経由でのみ呼ぶ
-   - Orchestratorは注入されたStepのインターフェースにだけ依存する（テストでモック化する）
+   - Orchestrator・Controllerは注入された依存（Step・確認処理）のインターフェースにだけ依存する（テストでモック化する）
    - 純粋関数（`resolveOutputPaths` / `buildSegments`）は副作用を持たせずテスト対象にする
-3. **仕様変更の影響を局所化する**
+3. **UIは「基本部品」と「画面」に分ける**
+   - 基本部品（`components/ui/`）：見た目と状態（hover/focus/pressed/disabled）だけを持ち、アプリの状態を知らない
+   - 画面（`DropZone` 等）：ストアを読み、基本部品を組み合わせるだけ。色・影・角丸の値を直接書かない
+4. **仕様変更の影響を局所化する**
    - 出力先決定 → `outputPaths.ts` のみ
    - 無音スライドの扱い → `buildSegments` のみ
    - 結合方式の判定 → `audio/plan.rs` のみ
    - タイムスタンプ計算 → `audio/timeline.rs` のみ
+   - 見た目の値 → `tokens.css`（変更禁止）と `base.css`・各基本部品のみ
 
 ---
 
@@ -36,6 +42,7 @@ sequenceDiagram
   participant U as ユーザー
   participant DZ as DropZone
   participant C as pipelineController
+  participant D as confirmDialog
   participant O as Orchestrator
   participant R as Rustコマンド
 
@@ -45,9 +52,12 @@ sequenceDiagram
   C->>C: 件数・拡張子チェック / resolveOutputPaths
   C->>R: check_outputs_exist
   alt 既存あり
-    C->>U: 上書き確認ダイアログ
+    C->>D: requestConfirm()
+    D->>U: アプリ内Dialog（上書きする／キャンセル）
+    U-->>D: 選択
+    D-->>C: true / false
   end
-  C->>O: run(inputPath, outputs, onProgress)
+  C->>O: run(inputPath, outputs, { onStart, onProgress })
   O->>R: extract_pptx
   par 並行実行
     O->>R: run_ffmpeg_concat
@@ -68,9 +78,9 @@ sequenceDiagram
 ```
 src-tauri/src/
 ├─ main.rs                 # ondemandclass_mspp_converter_lib::run()
-├─ lib.rs                  # Builder: plugin(dialog, opener), manage(AppState), invoke_handler
+├─ lib.rs                  # Builder: plugin(opener), manage(AppState), invoke_handler
 ├─ state.rs                # AppState { settings: Mutex<Option<AppSettings>> }
-├─ error.rs                # AppError（thiserror不使用。Display実装で日本語文言を作る）
+├─ error.rs                # AppError（Display実装で日本語文言を作る）
 ├─ process.rs              # run_with_timeout
 ├─ commands/
 │  ├─ mod.rs
@@ -84,7 +94,7 @@ src-tauri/src/
 │  ├─ locate.rs            # 設定ファイルパスの決定（debug/release）
 │  └─ validate.rs          # 読み込み・検証（純粋関数＋ファイル存在確認）
 ├─ pptx/
-│  ├─ mod.rs               # extract_slide_audio_map(reader) -> SlideAudioMap
+│  ├─ mod.rs               # extract_slide_audio_map(pkg) -> SlideAudioMap
 │  ├─ package.rs           # PptxPackage: zipエントリ読み取り、パス正規化、存在確認
 │  ├─ rels.rs              # *.rels 解析 → HashMap<rId, Relationship>
 │  ├─ presentation.rs      # sldIdLst → 表示順のスライドパス
@@ -143,7 +153,7 @@ pub struct SlideTimestampEntry { pub slide: u32, pub start_sec: f64, pub end_sec
 pub struct ConcatResult { pub timestamps: Vec<SlideTimestampEntry>, pub reencoded: bool }
 ```
 
-- `AudioSegment` のフィールドは serde の `tag` 付き列挙＋各バリアントに
+- `AudioSegment` は serde の `tag` 付き列挙＋各バリアントに
   `#[serde(rename_all = "camelCase")]` を付け、TSの判別共用体
   （`{ kind: "media", slideIndex, mediaPath }`）と一致させる
 
@@ -200,7 +210,7 @@ pub fn run_with_timeout(cmd: Command, timeout: Duration) -> Result<ProcessOutput
   - `timing_audio_order: Vec<String>`：`p:timing` 内の `p:audio` 要素ごとに、
     配下の `p:spTgt@spid` を出現順に収集
   - `advance_sec: Option<f64>`：`p:transition@advTm`（ミリ秒）÷1000。
-    `mc:AlternateContent` 内にある場合も探索する（`p:transition` が `mc:Choice`/`mc:Fallback`
+    `mc:AlternateContent` 内にある場合も探索する（`mc:Choice`/`mc:Fallback`
     の両方にある場合は最初に見つかった値）
 - 音声の並び順の決定：
   1. `timing_audio_order` の spid 順に、該当する Audio 図形を並べる（重複は除く）
@@ -217,7 +227,7 @@ pub fn run_with_timeout(cmd: Command, timeout: Duration) -> Result<ProcessOutput
   - `slide_order` → 各スライドを `parse_slide` → rels解決 → `SlideAudioEntry` を組み立て
   - 警告文言：
     - 「スライド{n}：音声がリンク切れのため無音として扱います」
-    - 「スライド{n}：動画ナレーションはv1では対象外のため無音として扱います」
+    - 「スライド{n}：動画ナレーションは対象外のため無音として扱います」
 
 ### 3.6 `audio/`
 
@@ -281,7 +291,6 @@ pub fn build_timeline(slide_indices: &[u32], segment_durations: &[(u32, f64)]) -
 
 ```rust
 tauri::Builder::default()
-    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .manage(AppState::default())
     .invoke_handler(tauri::generate_handler![
@@ -297,7 +306,6 @@ tauri::Builder::default()
 ### 3.10 `capabilities/default.json`
 
 - `core:default`
-- `dialog:allow-ask`（上書き確認）
 - `opener:allow-reveal-item-in-dir`（出力フォルダを開く）
 - ドラッグ＆ドロップは `core:default` に含まれるイベント権限で受信する
 - 実装時に各プラグインの権限名を公式ドキュメントで確認し、最小権限にする
@@ -306,8 +314,11 @@ tauri::Builder::default()
 
 - `identifier`: `com.rinfromniigata.ondemandclass-mspp-converter`
 - `productName`: `ondemandclass_mspp_converter`（実行ファイル名に使われるためASCII）
-- ウィンドウタイトル: `オンデマンドスライドコンバーター`、初期サイズ 720×520
-- `dragDropEnabled`: true（既定値。明示しておく）
+- ウィンドウ
+  - タイトル: `オンデマンドスライドコンバーター`
+  - 初期サイズ 720×520、`minWidth: 480`、`minHeight: 360`
+  - `dragDropEnabled`: true（既定値。明示しておく）
+- `bundle.icon`: `tauri icon` が生成した `icons/` 配下のファイル群
 
 ---
 
@@ -334,14 +345,15 @@ export type Commands = typeof commands;
 
 - 各Stepは `constructor(private readonly cmd: Commands = commands, ...)` とし、テストでモックを注入できるようにする
 - `execute` は全体を `try/catch` で包み、例外は `{ success: false, message: String(e) }` に変換
-- `stepName` は日本語の表示名（例：「pptx解析」「音声結合」「PDF変換」「タイムスタンプ書き出し」）
+- `name` と `stepName` は同じ日本語の表示名（「pptx解析」「音声結合」「PDF変換」「タイムスタンプ書き出し」）。
+  `running` の照合にも `name` を使う
 
 ### 4.3 `audioConcatStep.ts`
 
 ```typescript
 export function buildSegments(slides: SlideAudioEntry[], s: Pick<AppSettings, "silentSlideHandling" | "silentSlideDefaultSec">): AudioSegment[];
 ```
-- スペック6章の規則どおり。`execute` は
+- スペック7章の規則どおり。`execute` は
   1. `slides.some(s => s.hasAudio)` が偽なら失敗（「音声を含むスライドがありません」）
   2. `buildSegments` → `runFfmpegConcat`
   3. `reencoded` なら警告「音声の形式がスライド間で異なるため再エンコードで結合しました」
@@ -355,11 +367,12 @@ export function buildSegments(slides: SlideAudioEntry[], s: Pick<AppSettings, "s
 
 ### 4.5 `orchestrator.ts`
 
-- スペック6章のコードどおり。`RunSummary` 集計規則：
+- スペック7章のコードどおり。`onStart` は各ステップの `execute` 呼び出し直前に呼ぶ
+- `RunSummary` 集計規則：
   - extract 失敗 → `failedSteps = [extract]`、outputs 空
   - audio 成功 → `outputs.audio`、失敗 → failedSteps に追加し JSON は実行しない。
-    このとき JSON ステップは「音声結合が失敗したため実行しませんでした」の失敗結果を
-    `onProgress` に通知し、failedSteps に追加する
+    このとき JSON ステップは `onStart` を呼ばず、「音声結合が失敗したため実行しませんでした」の
+    失敗結果を `onProgress` に通知し、failedSteps に追加する
   - pdf 成功 → `outputs.pdf`、失敗 → failedSteps に追加
   - json 成功 → `outputs.json`、失敗 → failedSteps に追加
 
@@ -370,43 +383,121 @@ export function createPipelineController(deps: {
   store: Writable<PipelineState>;
   getSettings: () => SettingsStatus | null;
   commands: Commands;
-  confirm: (message: string) => Promise<boolean>;   // 既定は plugin-dialog の ask
+  confirm: (req: ConfirmRequest) => Promise<boolean>;   // 既定は confirmDialog.requestConfirm
   createOrchestrator: (settings: AppSettings) => PipelineOrchestrator;
 }): { startConversion(paths: string[]): Promise<void> };
 ```
 - 依存を注入できるファクトリにして単体テストする。既定のインスタンスを `pipelineController` として export
 - 同時実行防止：`get(store).view !== "idle"` なら即 return
-- 状態遷移：スペック6章の手順1〜5
+- `onStart(name)`：`running` に追加。`onProgress(r)`：`running` から `r.stepName` を除き、`results` に追加
+- 状態遷移：スペック7章の手順1〜5
 
-### 4.7 `settings.ts`
+### 4.7 `confirmDialog.ts`
+
+```typescript
+export interface ConfirmRequest { title: string; message: string; details?: string[]; confirmLabel: string; cancelLabel: string }
+export const pendingConfirm: Readable<(ConfirmRequest & { resolve: (ok: boolean) => void }) | null>;
+export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
+```
+- 同時に1件だけ保持する。表示中に新しい要求が来た場合は前の要求を `false` で解決してから置き換える
+- `ConfirmDialog.svelte` がボタン押下・Esc で `resolve` を呼び、ストアを `null` に戻す
+
+### 4.8 `settings.ts`
 
 - `settingsStatus = writable<SettingsStatus | null>(null)`
 - `reloadSettings()`：`commands.loadAndValidateSettings()` を呼んでストアに入れる。
   invoke自体が失敗した場合は `{ ok: false, errors: [String(e)], ... }` を入れる
 
-### 4.8 コンポーネント
+---
 
-- `+page.svelte`：`onMount(reloadSettings)`、`<Wizard />` のみ
+## 5. デザインシステムの実装
+
+### 5.1 スタイルの読み込み
+
+- `src/lib/styles/tokens.css`：`ondemandclass_mspp_converter_tokens.css` を**値を変えずに**配置する
+  （ファイル冒頭に原本のパスを示すコメントを1行追加するのみ）
+- `src/lib/styles/base.css`：
+  - 最小限のリセット（`box-sizing`、`margin: 0`、`body` に `--font-family-base` / `--font-size-base` /
+    `--line-height-base` / `--color-bg` / `--color-text`）
+  - `color-scheme: light dark`（スクロールバー等のOS部品の配色を追従させる）
+  - フォーカスリング：`:focus-visible { outline: 2px solid var(--color-primary-strong); outline-offset: 2px; }`
+  - reduced-motion：
+    ```css
+    @media (prefers-reduced-motion: reduce) {
+      :root { --motion-duration-fast: 0ms; --motion-duration-base: 0ms; --motion-duration-slow: 0ms; }
+    }
+    ```
+    （tokens.css より後に読み込むことで上書きする）
+  - 部品間で共有するユーティリティ：`.elevation-0〜3`（`box-shadow`）、`.shape-sm/md/lg/full`（`border-radius`）
+- `src/routes/+layout.svelte` で `tokens.css` → `base.css` の順に import する
+
+### 5.2 状態レイヤー
+
+- 手法は `::before` 疑似要素＋`color-mix()` を採用する（背景色を書き換えず、どの背景色の部品にも同じ方法で重ねられるため）
+  ```css
+  .state-layer { position: relative; isolation: isolate; }
+  .state-layer::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+    background: currentColor; opacity: 0;
+    transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  .state-layer:hover::before { opacity: var(--state-layer-opacity-hover); }
+  .state-layer:focus-visible::before { opacity: var(--state-layer-opacity-focus); }
+  .state-layer:active::before { opacity: var(--state-layer-opacity-pressed); }
+  ```
+- disabled：文字・アイコンは `opacity: var(--opacity-disabled-content)`、
+  Filled Button の背景は `color-mix(in srgb, var(--color-text) calc(var(--opacity-disabled-container) * 100%), transparent)`
+- dragged（16%）：DropZone のドラッグオーバー時に Card に適用する
+- Banner の背景：`color-mix(in srgb, var(--color-error) 12%, var(--color-surface))`
+- Dialog のスクリム：`color-mix(in srgb, var(--color-text) 8%, transparent)`
+- `color-mix()` は WebView2（Chromium 111以降）で利用できる
+
+### 5.3 基本部品の Props（Svelte 5 runes、`$props()`）
+
+| 部品 | 主な Props | 備考 |
+|---|---|---|
+| `Button` | `variant: "filled" \| "text"`, `disabled?`, `onclick`, `children` | `<button>` 要素。高さ40px、`min-width: 64px`、shape md、`.state-layer` |
+| `Card` | `elevation?: 0〜3`（既定1）, `dragged?: boolean`, `children` | shape lg、背景 `--color-surface` |
+| `ListItem` | `status: "running" \| "success" \| "warning" \| "error"`, `label`, `detail?` | leading にアイコンまたは ProgressIndicator。状態ラベル（処理中／完了／完了（警告あり）／失敗）を必ずテキストで出す |
+| `ProgressIndicator` | `size?: "sm" \| "lg"`, `label`（読み上げ用） | SVG円弧の回転。`role="progressbar"`、`aria-label`。reduced-motion 時は回転を止め、ラベル表示で代替 |
+| `Dialog` | `open`, `title`, `onclose`, `children`, `actions` | `<dialog>` 要素と `showModal()` を使い、フォーカスの閉じ込めと Esc をブラウザ標準の挙動に任せる。elevation 3、shape lg |
+| `Banner` | `tone: "error"`, `title?`, `items?: string[]`, `children`, `actions?` | 文字は `--color-text`、アイコンと左端4pxの帯が `--color-error`。`role="alert"`（idleの設定エラー）または `role="status"`（警告）を Props で切り替え |
+| `StatusChip` | `status: "done" \| "partial" \| "failed"` | ラベル「完了」「一部エラー」「失敗」、shape full。アイコンを併記 |
+
+- アイコンは外部ライブラリを使わず、必要な数個（成功・失敗・警告・矢印・フォルダ）をインラインSVGの小コンポーネントとして `components/ui/icons/` に置く
+- クリック可能領域は 40×40px 以上を保証する（Text Button も `min-height: 40px`）
+
+### 5.4 画面の構成
+
+- `+page.svelte`：`onMount(reloadSettings)`、`<Wizard />` と `<ConfirmDialog />` のみ
 - `Wizard.svelte`：`{#if $pipelineState.view === "idle"}<DropZone/>{:else if ...}` のみ
-- `DropZone.svelte`：
+- `DropZone.svelte`
+  - Card の中に「ここに pptx / ppsx をドロップ」の一文と、下向き矢印のモチーフ（インラインSVG）
   - `onMount` で `getCurrentWebview().onDragDropEvent(handler)` を登録し、返り値の unlisten を `onDestroy` で呼ぶ
-  - `enter`/`over` で強調表示、`leave` で解除、`drop` で `pipelineController.startConversion(event.payload.paths)`
-  - 設定エラー時はエラー一覧・設定ファイルパス・「設定を再読み込み」ボタンを表示
-- `ProcessingView.svelte`：`results` をリスト表示。スピナーと「処理中…」
-- `ResultView.svelte`：成果物パス、警告一覧、失敗ステップ強調、
-  「出力フォルダを開く」（`revealItemInDir(最初に存在する成果物)`）、「別のファイルを変換する」
-- スタイルは各コンポーネントの `<style>` に最小限で書く（UIライブラリは導入しない）
+  - `enter`/`over` で `dragged` 表示（elevation 2＋dragged 状態レイヤー）、`leave` で解除、`drop` で `pipelineController.startConversion(event.payload.paths)`
+  - 設定エラー時は Card の上に Banner（エラー一覧＋設定ファイルパス＋Text Button「設定を再読み込み」）を出し、Card を disabled 表示にする
+- `ProcessingView.svelte`
+  - `running` に「pptx解析」が含まれる間は中央に ProgressIndicator（lg）を1つ
+  - それ以降は `results` と `running` を ListItem で並べる（完了したものは到着順、実行中のものはその後ろ）
+- `ResultView.svelte`
+  - 先頭に StatusChip、続いて成果物一覧の Card（ファイル種別の小アイコン＋フルパス。等幅フォント `--font-family-mono`）
+  - 警告・失敗は Banner。失敗ステップのメッセージは Banner 内で強調する
+  - ボタン行：Filled「出力フォルダを開く」（成果物があるときのみ）、Filled「別のファイルを変換する」、Text「ログ詳細」
+  - 完了画面の構成に「仕分けトレイ」のモチーフ（1つの入力から3つの出力に分かれる簡素な図）を添える。装飾は控えめにする
+- `ConfirmDialog.svelte`：`pendingConfirm` を購読し、Dialog に既存ファイル名一覧（等幅）と2つのボタンを表示する
+- 画面遷移のアニメーションは不透明度の変化のみ（`--motion-duration-base`）とし、移動・拡大の演出はしない
 
-### 4.9 テスト（Vitest）
+### 5.5 アイコン生成
 
-- `vite.config.ts` に `test: { environment: "node", include: ["src/**/*.test.ts"] }`
-- `package.json` に `"test": "vitest run"`
-- 対象：`outputPaths.test.ts`、`audioConcatStep.test.ts`（`buildSegments` と音声なし判定）、
-  `orchestrator.test.ts`（モックStep）、`pipelineController.test.ts`（モック依存）
+- アイコン原本 `assets/design/ondemandclass_mspp_converter_icon_master.svg` を入力に `bun tauri icon` を実行し、`src-tauri/icons/` を生成する
+- 原本はIllustratorのメタデータ（XMP）を含むが、生成には影響しないためそのまま使う
+- 生成に失敗する場合（SVGの読み込み不可等）は、1024×1024のPNGに書き出してから入力にする（fixとして記録）
 
 ---
 
-## 5. Rust側のテスト方針
+## 6. テスト方針
+
+### 6.1 Rust
 
 - ドメイン層の純粋関数は各モジュール内の `#[cfg(test)] mod tests` で単体テストする
 - pptx解析のテスト入力は `src-tauri/tests/common/fixture.rs` の
@@ -427,22 +518,42 @@ export function createPipelineController(deps: {
   （44.1kHz/48kHz、mono/stereo、AAC/MP3）をfixtureに埋め込んで実行する。
   実行は `cargo test -- --ignored`
 
+### 6.2 TypeScript（Vitest）
+
+- `vite.config.ts` に `test: { environment: "node", include: ["src/**/*.test.ts"] }`
+- `package.json` に `"test": "vitest run"`
+- 対象：
+  - `outputPaths.test.ts`
+  - `audioConcatStep.test.ts`（`buildSegments` と音声なし判定）
+  - `orchestrator.test.ts`（モックStep。`onStart` / `onProgress` の呼び出し順と `RunSummary` の集計）
+  - `pipelineController.test.ts`（モック依存。受付拒否、上書き確認のキャンセル／承諾、`running` と `results` の遷移、done / error の判定）
+  - `confirmDialog.test.ts`（解決、置き換え時の前要求の `false` 解決）
+- Svelteコンポーネントの描画テストは導入しない（見た目は walk の目視確認で行う）
+
+### 6.3 コントラスト確認
+
+- `scripts/contrast-check.ts`（Bun実行）で、`tokens.css` からライト・ダーク両方の色を読み取り、
+  実際に使う「文字色×背景色」の組み合わせのコントラスト比を一覧出力する。4.5:1未満があれば非ゼロ終了する
+- 対象の組み合わせ：`--color-text`／`--color-text-muted` × `--color-bg`／`--color-surface`／`--color-surface-sunken`／Banner背景、
+  `--color-text-on-primary` × `--color-primary`／`--color-primary-strong`、`--color-text-on-secondary` × `--color-secondary`
+
 ---
 
-## 6. リポジトリへのscaffold導入手順
+## 7. リポジトリへのscaffold導入手順
 
-リポジトリ直下には既に `roadmap/` と `.gitignore` があるため、`create-tauri-app` を直接実行せず以下で行う。
+リポジトリ直下には既に `roadmap/`・`assets/`・`.gitignore` があるため、`create-tauri-app` を直接実行せず以下で行う。
 
 1. スクラッチディレクトリで `bun create tauri-app ondemandclass_mspp_converter --template svelte-ts --manager bun --identifier com.rinfromniigata.ondemandclass-mspp-converter -y` を実行
 2. 生成物（`.git` を除く）をリポジトリ直下へコピー。`.gitignore` は既存内容に生成物の内容を追記してマージ
 3. `svelte.config.js` が adapter-static・`fallback: "index.html"`、`src/routes/+layout.ts` が `ssr = false` になっていることを確認（テンプレートの既定と異なれば修正）
-4. テンプレートのサンプル（greetコマンド、ロゴ画像、サンプルCSS）を削除
+4. テンプレートのサンプル（greetコマンド、ロゴ画像、サンプルCSS、既定アイコン）を削除
 
 ---
 
-## 7. `.gitignore` に追加する項目
+## 8. `.gitignore` に追加する項目
 
 - `roadmap/archived/`（既存）
+- `assets/design/ai/`（既存）
 - `app.settings.json`
 - `samples/`
 - scaffoldが生成する項目（`node_modules/`、`.svelte-kit/`、`build/`、`src-tauri/target/` 等）

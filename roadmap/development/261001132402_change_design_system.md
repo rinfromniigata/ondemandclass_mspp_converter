@@ -1,6 +1,7 @@
 # 仕様変更サマリー（change）: デザインシステムの導入
 
-- 状態: **承認待ち**
+- 状態: **承認済み**（261001、Q1〜Q4はすべて推奨案で確定。Q4は `ondemandclass_mspp_converter_brand.md` が追加されたため取り込み対象に加えた）
+- 反映先: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md` ほか新タイムスタンプの imple・tasks・walk
 - 変更元: リポジトリ直下の `ondemandclass_mspp_converter_SPEC.md`（3章「デザインシステム」）、
   `ondemandclass_mspp_converter_tokens.css`、`ondemandclass_mspp_converter_icon_master.svg`
 - 取り込み方針: 直下のスペックシートからは**3章（デザインシステム）のみ**を取り込む。
@@ -148,6 +149,12 @@
   - W5-8 【エージェント】主要な文字色と背景色の組み合わせのコントラスト比を計算し、4.5:1以上であることを記録する
 
 ---
+
+## 3.5 確定した回答
+- Q1：推奨案。Bannerの文字は `--color-text`、`--color-error` はアイコンと左端の帯のみ。トークン値は変更しない
+- Q2：変更なし。フォーカスリングの視認性はwalkで目視確認する
+- Q3：成果物がない場合のStatus Chipは「失敗」
+- Q4：`ondemandclass_mspp_converter_brand.md` が追加された。ブランド方向性（性格・モチーフ・避けたいもの）をv2の3章に取り込み、ファイルはアセットとして `assets/design/` へ移す（T1-9）
 
 ## 4. 承認後の手順
 1. 現行の imple・tasks・walk・`SPEC_v1.md` を `roadmap/archived/` へ移す
