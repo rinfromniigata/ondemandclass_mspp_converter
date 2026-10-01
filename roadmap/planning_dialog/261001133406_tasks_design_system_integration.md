@@ -26,9 +26,10 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - **soffice: 未インストール**（PATH・Program Files・LocalAppData・scoop・chocolatey・アンインストール情報のいずれにもなし）→ T1-2 で LibreOffice のインストールが必要
     - WebView2 Runtime 154.0.4258.48（Chromium 111以降の条件を満たす）
     - 参考: node（`C:\Program Files\nodejs\node.exe`）・git あり
-- [ ] T1-2 【ユーザー】T1-1で不足が見つかったツールをインストールする
+- [x] T1-2 【ユーザー】T1-1で不足が見つかったツールをインストールする
   - 依存: T1-1
   - 不足がなければ実施不要としてチェックする
+  - 実施メモ: LibreOffice 26.8.0.3 をインストール。`C:\Program Files\LibreOffice\program\soffice.exe`（PATHには未登録。`app.settings.json` はフルパスで指定するため問題なし）
 - [ ] T1-3 【エージェント】スクラッチディレクトリでTauri（svelte-ts）テンプレートを生成し、リポジトリ直下へ取り込む
   - 依存: T1-2
   - 手順は imple 7章。`.gitignore` は既存内容とマージする
