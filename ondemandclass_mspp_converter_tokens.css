@@ -1,0 +1,140 @@
+/*
+ * オンデマンドスライドコンバーター デザイントークン
+ * 方向性B（軽快・即応・省力）
+ *
+ * 確定事項（変更禁止）：以下の値そのもの
+ * 委任事項（エージェントに任せる）：各OS・コンポーネントへの適用方法、
+ *   フレームワーク固有の変数へのマッピング、縮小表示の確認
+ */
+
+:root {
+  /* ===== ブランドカラー（ライト・ダーク共通の固定値） ===== */
+  --color-primary: #91c5ec;       /* アイコン背景と同一。プライマリ */
+  --color-primary-strong: #5fa3d9; /* ホバー・押下など強調時 */
+  --color-secondary: #ecb891;      /* 補色（H+180°、同S/L）。CTA・完了強調用 */
+  --color-secondary-strong: #dd9c66;
+
+  /* セマンティックカラー（成功・エラー・警告。secondaryとは別系統で用意し混同を避ける） */
+  --color-success: #8be4ac;
+  --color-error: #e48b97;
+  --color-warning: #e4c98b;
+
+  /* ===== ライトモード：背景・文字・境界線 ===== */
+  --color-bg: #f4f8fb;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #e9f1f8;
+  --color-border: #d7e4ee;
+  --color-text: #1b2730;
+  --color-text-muted: #55636d;
+  --color-text-on-primary: #0b2538;
+  --color-text-on-secondary: #3a2211;
+
+  /* ===== タイポグラフィ ===== */
+  /* Windows / macOS 両対応。和文は游ゴシック/ヒラギノ角ゴ系、欧文はOS標準UIフォントに委ねる */
+  --font-family-base:
+    "Yu Gothic UI", "Hiragino Kaku Gothic ProN", "Segoe UI",
+    system-ui, -apple-system, sans-serif;
+  --font-family-mono:
+    "Cascadia Mono", "SF Mono", Consolas, "Courier New", monospace;
+
+  --font-size-xs: 0.75rem;   /* 12px 補足・キャプション */
+  --font-size-sm: 0.875rem;  /* 14px ログ・本文small */
+  --font-size-base: 1rem;    /* 16px 本文 */
+  --font-size-lg: 1.25rem;   /* 20px 見出し小 */
+  --font-size-xl: 1.75rem;   /* 28px 画面タイトル */
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+
+  /* ===== 余白の段階（4pxベース） ===== */
+  --space-2xs: 0.25rem; /* 4px */
+  --space-xs: 0.5rem;   /* 8px */
+  --space-sm: 0.75rem;  /* 12px */
+  --space-md: 1rem;     /* 16px */
+  --space-lg: 1.5rem;   /* 24px */
+  --space-xl: 2rem;     /* 32px */
+  --space-2xl: 3rem;    /* 48px */
+  --space-3xl: 4rem;    /* 64px */
+
+  /* ===== 角丸（「軽快」寄り。アイコンのカード角丸rx≈30/1024系に近い比率感） ===== */
+  --radius-sm: 6px;   /* 入力・バッジ等の小要素 */
+  --radius-md: 10px;  /* ボタン・カード */
+  --radius-lg: 16px;  /* パネル・モーダル */
+  --radius-full: 999px; /* ピル・丸ボタン */
+
+  /* ===== 影（軽快さを保つため控えめ・低不透明度） ===== */
+  --shadow-sm: 0 1px 2px rgba(27, 39, 48, 0.06);
+  --shadow-md: 0 4px 12px rgba(27, 39, 48, 0.10);
+  --shadow-lg: 0 12px 32px rgba(27, 39, 48, 0.14);
+
+  /* ===== モーション（「即応」を裏切らない短さ） ===== */
+  --motion-duration-fast: 100ms;
+  --motion-duration-base: 160ms;
+  --motion-duration-slow: 240ms;
+  --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+
+  /* ===== 状態レイヤー／無効状態（Material Design 3 標準値。色に依存しないため明暗共通） ===== */
+  --state-layer-opacity-hover: 0.08;
+  --state-layer-opacity-focus: 0.12;
+  --state-layer-opacity-pressed: 0.12;
+  --state-layer-opacity-dragged: 0.16;
+  --opacity-disabled-content: 0.38;
+  --opacity-disabled-container: 0.12;
+}
+
+/* ===== ダークモード：システム設定に追従 ===== */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: #91c5ec;
+    --color-primary-strong: #bcdcf4;
+    --color-secondary: #ecb891;
+    --color-secondary-strong: #f3cda7;
+
+    --color-success: #69d390;
+    --color-error: #d36977;
+    --color-warning: #d3b369;
+
+    --color-bg: #11181f;
+    --color-surface: #182029;
+    --color-surface-sunken: #0c1217;
+    --color-border: #2b3744;
+    --color-text: #e7eef4;
+    --color-text-muted: #9fb0bd;
+    --color-text-on-primary: #0b2538;
+    --color-text-on-secondary: #3a2211;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.42);
+  }
+}
+
+/* ===== 手動切り替え用（OS設定に関わらず明示指定したい場合） ===== */
+:root[data-theme="dark"] {
+  --color-primary: #91c5ec;
+  --color-primary-strong: #bcdcf4;
+  --color-secondary: #ecb891;
+  --color-secondary-strong: #f3cda7;
+
+  --color-success: #69d390;
+  --color-error: #d36977;
+  --color-warning: #d3b369;
+
+  --color-bg: #11181f;
+  --color-surface: #182029;
+  --color-surface-sunken: #0c1217;
+  --color-border: #2b3744;
+  --color-text: #e7eef4;
+  --color-text-muted: #9fb0bd;
+  --color-text-on-primary: #0b2538;
+  --color-text-on-secondary: #3a2211;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.42);
+}
