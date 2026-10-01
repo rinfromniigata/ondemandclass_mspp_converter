@@ -95,9 +95,16 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `icon_master.svg`・`brand.md`: `assets/design/` へ移動。ハッシュは移動前と一致
     - リポジトリ直下に3ファイルが残っていないことを確認。`bun run check` はエラー0
     - **要確認（プランアセットの置き場所）**: グローバルルールでは、デザインアセットは `roadmap/specs/` に `_v{n}` 付きで置く（SPEC v2なら `_tokens_v2.css` 等）が、実際の `specs/` はSPEC_v2.mdのみで、3ファイルはv1・v2を通じてリポジトリ直下にあった（コミット b4ada72・52ded2e）。本項目の指示どおり直下から移動した結果、原本相当は `src/`・`assets/design/` の配置物とgit履歴（b4ada72）だけになっている。`specs/` へ `_v2` 付きで置き直すかはユーザーの判断を仰ぐ
-- [ ] T1-10 【エージェント】`bun tauri icon` でアプリアイコンを生成し、`tauri.conf.json` の `bundle.icon` を確認する
+- [x] T1-10 【エージェント】`bun tauri icon` でアプリアイコンを生成し、`tauri.conf.json` の `bundle.icon` を確認する
   - 依存: T1-5, T1-9
   - 生成に失敗した場合の対処は imple 5.5
+  - 実施メモ:
+    - `bun tauri icon assets/design/ondemandclass_mspp_converter_icon_master.svg`（tauri-cli 2.12.1。SVGを直接入力でき、XMPメタデータ付きのままで成功。PNG経由の代替手順は不要だった）
+    - 生成物のうち、対象外のAndroid（`icons/android/`）とiOS（`icons/ios/`）は削除。デスクトップ用（`32x32`・`64x64`・`128x128`・`128x128@2x`・`icon.png`・`icon.ico`・`icon.icns`・Windowsストア用 `Square*Logo`・`StoreLogo`）を残した
+    - `icon.ico` は16・24・32・48・64・256pxを含む
+    - `bundle.icon` はテンプレートの既定（`32x32.png`・`128x128.png`・`128x128@2x.png`・`icon.icns`・`icon.ico`）のままで、すべて実在することを確認
+    - `cargo check` が成功（T1-3以降止まっていたRust側のビルドが通るようになった。T1-5の `tauri.conf.json`・capabilities もここでtauri-buildの検証を通過）
+    - 32px・128pxのPNGを目視確認し、32pxでも矢印と重なったカードの形が判別できた。Windows・macOS上での見え方の最終確認は walk の【ユーザー】項目で行う
 
 ## Phase 2: Rust基盤
 - [ ] T2-1 【エージェント】`state.rs`・`error.rs`・`process.rs`（`run_with_timeout`）を実装する
