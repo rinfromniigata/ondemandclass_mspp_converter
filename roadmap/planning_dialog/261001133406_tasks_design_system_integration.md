@@ -121,9 +121,21 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `lib.rs` には `pub mod error / process / settings / state` の宣言のみ追加（State・コマンドの登録は T2-3）。結合テスト（T3-5）から参照できるよう `pub mod` にした
     - テスト: process 6件（正常終了・非ゼロ終了・タイムアウト・起動失敗・大量出力でのパイプ詰まりなし・tail_lines）、error 2件、state 2件。Windowsでは `cmd /D /C`、それ以外は `sh -c` を使い、タイムアウトはシェルを介さず `ping`／`sleep` を直接起動して確認
     - 確認: `cargo test --lib`（10件成功）・`cargo fmt --check`・`cargo clippy --all-targets`（警告0）
-- [ ] T2-2 【エージェント】`settings/`（探索・解析・検証）とコマンド `load_and_validate_settings` を実装する
+- [x] T2-2 【エージェント】`settings/`（探索・解析・検証）とコマンド `load_and_validate_settings` を実装する
   - 依存: T2-1
   - `parse_settings` / `validate` の単体テスト（省略項目のデフォルト、不正値、パス不在）を書く
+  - 実施メモ:
+    - `settings/mod.rs`: `SettingsStatus` を追加。`settings` は `ok` のときだけ `Some` とし、検証に失敗したときは `null` を返す
+    - `locate.rs`: `settings_path()`。debugビルドは `CARGO_MANIFEST_DIR` の親、releaseビルドは `current_exe()` の親に `app.settings.json` を連結する
+    - `validate.rs`:
+      - `parse_settings` は、いったん `serde_json::Value` として読み、項目の有無と型を確認してから `AppSettings` に変換する。serdeの英語のエラー文言ではなく、項目名を含む日本語の文言を返すため。シグネチャ（`Result<AppSettings, String>`）は imple どおりで、問題は最初の1件だけを返す
+      - `validate` は、3つの実行パスの実在（フォルダの場合は「ファイルではありません」）と `silentSlideDefaultSec >= 0` を確認し、問題をすべて返す。`silentSlideHandling` の値は parse の段階で確認する
+      - ファイルがない場合の文言はスペック5.2どおり（探したパスと `app.settings.example.json` の案内を含める）。BOM付きUTF-8（メモ帳で保存した場合）も受け付ける
+      - 不明な項目は無視する（項目名を打ち間違えた場合は、必須項目なら「〜がありません」で検出され、省略可能項目なら既定値になる）
+    - コマンド `commands/settings.rs`: Tauri 2（tauri-macros 2.7）では、参照（`State<'_>`）を引数に取るasyncコマンドは `Result` を返す必要がある（`wrapper.rs` で確認）。スペックの戻り値は `SettingsStatus`（Resultなし）のため、所有型の `AppHandle` を受けて `app.state::<AppState>()` で状態を更新する形にした。処理が軽いため `spawn_blocking` は使っていない
+    - `AppState` の `manage` とコマンドの登録はまだ行っていない（T2-3）。登録前に呼ぶと `app.state` がpanicするため、T2-3で必ず両方を行う
+    - テスト: settings 12件（parse 5件・validate 3件・load 3件・locate 1件）。全体で `cargo test --lib` 22件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 未確認: 実際の `app.settings.json` を読んだ結果は、T2-3でコマンドを登録してから確認する
 - [ ] T2-3 【エージェント】`lib.rs` にプラグイン・State・コマンドを登録し、`main.rs` を整える
   - 依存: T2-2
   - この時点では未実装のコマンドは登録しない（Phaseごとに追加する）
