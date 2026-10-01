@@ -74,8 +74,13 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 実施メモ:
     - ひな形の内容はスペック5.2のサンプルどおり（ダミーパス `C:\ffmpeg\bin\...`・`C:\Program Files\LibreOffice\...`、省略可能3項目はデフォルト値を明記）
     - `git check-ignore` で、`app.settings.json`・`samples/` 配下（`samples/derived/` を含む）が除外され、`app.settings.example.json` は除外されないことを確認
-- [ ] T1-7 【エージェント】T1-1で確認したパスを使って `app.settings.json` を作成する
+- [x] T1-7 【エージェント】T1-1で確認したパスを使って `app.settings.json` を作成する
   - 依存: T1-1, T1-6
+  - 実施メモ:
+    - ffmpeg・ffprobeはwingetのLinks側（`C:\Users\ofuchirin\AppData\Local\Microsoft\WinGet\Links\`）、sofficeは `C:\Program Files\LibreOffice\program\soffice.exe`。省略可能3項目は既定値を明記
+    - 3パスとも実在することを確認。ffmpeg・ffprobeは `-version` で起動できた（9.0.2）
+    - `soffice --version` は、GUIのランチャーが `soffice.bin` を起動して戻らなかったため、起動確認は未実施（30秒で打ち切り、残った `soffice` / `soffice.bin` は停止済み）。実際の起動確認は T4-5・T6-3 のPDF変換（`--headless --convert-to`）で行う
+    - `app.settings.json` はignore済みであることを確認
 - [ ] T1-8 【ユーザー】手動検証用に、実際に配布されたpptx（あればppsxも）を `samples/` に置く
   - 手動検証（walk Phase 6）までに用意できればよい。Phase 2以降の着手を妨げない
 - [ ] T1-9 【エージェント】デザインアセットを配置する
