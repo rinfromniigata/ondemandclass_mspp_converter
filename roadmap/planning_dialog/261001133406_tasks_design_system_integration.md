@@ -81,13 +81,20 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 3パスとも実在することを確認。ffmpeg・ffprobeは `-version` で起動できた（9.0.2）
     - `soffice --version` は、GUIのランチャーが `soffice.bin` を起動して戻らなかったため、起動確認は未実施（30秒で打ち切り、残った `soffice` / `soffice.bin` は停止済み）。実際の起動確認は T4-5・T6-3 のPDF変換（`--headless --convert-to`）で行う
     - `app.settings.json` はignore済みであることを確認
-- [ ] T1-8 【ユーザー】手動検証用に、実際に配布されたpptx（あればppsxも）を `samples/` に置く
+- [x] T1-8 【ユーザー】手動検証用に、実際に配布されたpptx（あればppsxも）を `samples/` に置く
   - 手動検証（walk Phase 6）までに用意できればよい。Phase 2以降の着手を妨げない
-- [ ] T1-9 【エージェント】デザインアセットを配置する
+  - 実施メモ: ユーザー報告により完了。`samples/` に ppsx が2点（`20260930_創作に係る倫理と知的財産１ （前編）.ppsx` 約82MB、`（後編）.ppsx` 約75MB）。**pptx は未配置**（ppsxのみ）
+  - 注意: T6-2 の派生サンプル（ppsx版）はこのppsxから作れるが、pptx版が必要な検証（walk Phase 6でpptx入力を確認する項目）では、ppsxの拡張子と `[Content_Types].xml` を書き換えて作るか、pptxを追加で置くか判断が要る
+- [x] T1-9 【エージェント】デザインアセットを配置する
   - 依存: T1-3
   - リポジトリ直下の `ondemandclass_mspp_converter_tokens.css` → `src/lib/styles/tokens.css`（値は変更しない。冒頭に原本の説明コメントを1行追加するのみ）
   - `ondemandclass_mspp_converter_icon_master.svg` と `ondemandclass_mspp_converter_brand.md` → `assets/design/`
   - 移動後、リポジトリ直下に3ファイルが残っていないことを確認する
+  - 実施メモ:
+    - `tokens.css`: 冒頭に原本名を示すコメントを1行追加。それ以降は原本とバイト単位で一致（SHA-256で確認、BOMなし・LF改行のまま）。リポジトリ直下の原本は削除
+    - `icon_master.svg`・`brand.md`: `assets/design/` へ移動。ハッシュは移動前と一致
+    - リポジトリ直下に3ファイルが残っていないことを確認。`bun run check` はエラー0
+    - **要確認（プランアセットの置き場所）**: グローバルルールでは、デザインアセットは `roadmap/specs/` に `_v{n}` 付きで置く（SPEC v2なら `_tokens_v2.css` 等）が、実際の `specs/` はSPEC_v2.mdのみで、3ファイルはv1・v2を通じてリポジトリ直下にあった（コミット b4ada72・52ded2e）。本項目の指示どおり直下から移動した結果、原本相当は `src/`・`assets/design/` の配置物とgit履歴（b4ada72）だけになっている。`specs/` へ `_v2` 付きで置き直すかはユーザーの判断を仰ぐ
 - [ ] T1-10 【エージェント】`bun tauri icon` でアプリアイコンを生成し、`tauri.conf.json` の `bundle.icon` を確認する
   - 依存: T1-5, T1-9
   - 生成に失敗した場合の対処は imple 5.5
