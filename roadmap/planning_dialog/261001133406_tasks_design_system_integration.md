@@ -30,11 +30,22 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 依存: T1-1
   - 不足がなければ実施不要としてチェックする
   - 実施メモ: LibreOffice 26.8.0.3 をインストール。`C:\Program Files\LibreOffice\program\soffice.exe`（PATHには未登録。`app.settings.json` はフルパスで指定するため問題なし）
-- [ ] T1-3 【エージェント】スクラッチディレクトリでTauri（svelte-ts）テンプレートを生成し、リポジトリ直下へ取り込む
+- [x] T1-3 【エージェント】スクラッチディレクトリでTauri（svelte-ts）テンプレートを生成し、リポジトリ直下へ取り込む
   - 依存: T1-2
   - 手順は imple 7章。`.gitignore` は既存内容とマージする
   - adapter-static（`fallback: "index.html"`）と `+layout.ts` の `ssr = false` を確認・修正する
   - テンプレートのサンプル（greet・ロゴ・サンプルCSS・既定アイコン）を削除する
+  - 実施メモ:
+    - 生成コマンドは `bun x create-tauri-app ondemandclass_mspp_converter --template svelte-ts --manager bun --identifier com.rinfromniigata.ondemandclass-mspp-converter --yes`（imple 7章の `bun create tauri-app ... -y` は `-y` がbun側に解釈されて失敗するため）
+    - 主なバージョン: svelte 5.57.1 / @sveltejs/kit 2.x / vite 8.3.1 / typescript 6.0.3 / @tauri-apps/api 2.12.1 / @tauri-apps/plugin-opener 2.7.0
+    - adapter-static（`fallback: "index.html"`）と `ssr = false` はテンプレートの既定のままで条件を満たしていたため修正なし
+    - 削除・除外したもの: greetコマンド（`lib.rs`）、`+page.svelte` のサンプル画面とサンプルCSS（空の `<main>` だけ残す）、`static/` のロゴ3点と `favicon.png`、`src-tauri/icons/`（既定アイコン）、テンプレートのREADME.md
+    - `app.html`: `lang="ja"`、タイトルを「オンデマンドスライドコンバーター」に変更し、favicon参照を削除（ファビコンはアイコン展開時に付け直す）
+    - `vite.config.js`: テンプレート由来の `@ts-expect-error` が `bun run check` でUnused判定のエラーになったため削除（`@types/node` なしで `node:process` の型が解決されるため）
+    - テンプレートは `vite.config.ts` ではなく `vite.config.js` を生成する。T1-4でテスト設定を追加する際に `.ts` へ改名する
+    - `src-tauri/Cargo.lock` もリポジトリに含める
+    - 確認: `bun install`・`bun run check`（エラー0）・`bun run build` が成功。`build`・`.svelte-kit`・`node_modules` はignore済み
+    - 注意: 既定アイコンを削除したため、T1-10でアイコンを生成するまでRust側（`tauri-build`）のビルドは通らない
 - [ ] T1-4 【エージェント】依存関係を追加する
   - 依存: T1-3
   - Rust: `zip` `quick-xml` `tempfile` `serde` `serde_json` `tauri-plugin-opener`
