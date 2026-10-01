@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "ondemandclass_mspp_converter",
-        "width": 800,
-        "height": 600
+        "title": "オンデマンドスライドコンバーター",
+        "width": 720,
+        "height": 520,
+        "minWidth": 480,
+        "minHeight": 360,
+        "dragDropEnabled": true
       }
     ],
     "security": {

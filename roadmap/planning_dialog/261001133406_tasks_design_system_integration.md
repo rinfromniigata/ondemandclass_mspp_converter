@@ -59,9 +59,16 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `vite.config.js` を `vite.config.ts` に置き換え、`vitest/config` の `defineConfig` を使って `test: { environment: "node", include: ["src/**/*.test.ts"] }` を追加
     - 確認: `bun run check`（エラー0）・`bun run build` は成功。`bun run test` はテストファイルがまだないため「No test files found」で終了コード1になる（T5-6でテストを書けば解消する）
     - 確認: `cargo check -p zip -p quick-xml -p tempfile` は成功。アプリ本体の `cargo check` は、T1-3の注意どおり `icons/icon.ico` がないため `tauri-build` で失敗する（T1-10で解消する）
-- [ ] T1-5 【エージェント】`tauri.conf.json` と `capabilities/default.json` を設定する
+- [x] T1-5 【エージェント】`tauri.conf.json` と `capabilities/default.json` を設定する
   - 依存: T1-4
   - 識別子・productName・ウィンドウタイトル・サイズ・最小サイズ（480×360）は imple 3.11、権限は imple 3.10
+  - 実施メモ:
+    - `tauri.conf.json`: ウィンドウを タイトル「オンデマンドスライドコンバーター」・720×520・minWidth 480・minHeight 360・`dragDropEnabled: true` に設定。識別子 `com.rinfromniigata.ondemandclass-mspp-converter` と productName `ondemandclass_mspp_converter` はT1-3のテンプレート生成時点で設定済み
+    - `capabilities/default.json`: `core:default` と `opener:allow-reveal-item-in-dir` の2つのみ。テンプレートの `opener:default` は外部URLを開く権限（`allow-open-url`・`allow-default-urls`）まで含むため置き換えた
+    - 権限名の根拠（`gen/schemas/desktop-schema.json` で確認）: `core:default` は `core:event:default`（`allow-listen`・`allow-unlisten`・`allow-emit`・`allow-emit-to`）と `core:webview:default` 等を含み、ドラッグ＆ドロップの受信（`onDragDropEvent` はイベントのlisten）に足りる。`opener:allow-reveal-item-in-dir` が存在する
+    - ウィンドウ設定のキー名は tauri-utils 2.9.3 の `config.rs` で確認。両ファイルとも有効なJSONであることを確認済み
+    - 未確認: Tauriによるビルド時検証は `icons/icon.ico` がなく `tauri-build` で止まるため、T1-10後の初回ビルドで確認する
+    - 未確認: ドラッグ＆ドロップが実際に受信できるかは、T5-7（DropZone）実装後の実機確認で検証する
 - [ ] T1-6 【エージェント】`app.settings.example.json` を作成し、`.gitignore` に `app.settings.json` と `samples/` を追加する
   - 依存: T1-3
 - [ ] T1-7 【エージェント】T1-1で確認したパスを使って `app.settings.json` を作成する
