@@ -107,10 +107,20 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 32px・128pxのPNGを目視確認し、32pxでも矢印と重なったカードの形が判別できた。Windows・macOS上での見え方の最終確認は walk の【ユーザー】項目で行う
 
 ## Phase 2: Rust基盤
-- [ ] T2-1 【エージェント】`state.rs`・`error.rs`・`process.rs`（`run_with_timeout`）を実装する
+- [x] T2-1 【エージェント】`state.rs`・`error.rs`・`process.rs`（`run_with_timeout`）を実装する
   - 依存: T1-4
   - CREATE_NO_WINDOW、stdout/stderr の別スレッド読み取り、タイムアウト時の kill を含む
   - `process.rs` の単体テスト（正常終了・非ゼロ終了・タイムアウト・起動失敗）を書く
+  - 実施メモ:
+    - `error.rs`: `AppError` は `SettingsNotLoaded`・`ProcessSpawn`・`ProcessTimeout`・`ProcessFailed`・`Io { context, source }`・`Message(String)`。`Display` で日本語文言を作り、stderr末尾（最大20行）は文言の後ろに改行して付ける
+    - `process.rs`: `run_with_timeout` は非ゼロ終了をエラーにせず `ProcessOutput` を返す（imple 3.3どおり）。呼び出し側が非ゼロ終了をエラーにするための `ProcessOutput::ensure_success(program)` を追加した（`ProcessFailed` にstderr末尾を付ける）
+    - stdinは `Stdio::null()` にする（ffmpegが標準入力を読みに行って止まるのを防ぐ）
+    - プロセス終了後・kill後にパイプを読み切るまでの待ちは最大5秒で打ち切る。sofficeのランチャーのように孫プロセスがパイプを引き継いで残る場合、読み取りスレッドの完了を待ち続けて止まるため（T1-7で `soffice.exe` が `soffice.bin` を起動して戻らない挙動を確認済み）。kill は直接の子プロセスのみで、孫プロセスは止めない。sofficeでの扱いは T4-5 で確認する
+    - `state.rs`: フィールドは非公開にし、`settings()`（未読み込みなら `SettingsNotLoaded`）と `set_settings(Option<AppSettings>)` で操作する
+    - `AppState` が `AppSettings` 型を必要とするため、`settings/mod.rs` に imple 3.2 の `AppSettings`・`SilentSlideHandling` の型定義（serdeの既定値を含む）だけを先に置いた。`SettingsStatus`・`locate.rs`・`validate.rs`・コマンドは T2-2 で実装する
+    - `lib.rs` には `pub mod error / process / settings / state` の宣言のみ追加（State・コマンドの登録は T2-3）。結合テスト（T3-5）から参照できるよう `pub mod` にした
+    - テスト: process 6件（正常終了・非ゼロ終了・タイムアウト・起動失敗・大量出力でのパイプ詰まりなし・tail_lines）、error 2件、state 2件。Windowsでは `cmd /D /C`、それ以外は `sh -c` を使い、タイムアウトはシェルを介さず `ping`／`sleep` を直接起動して確認
+    - 確認: `cargo test --lib`（10件成功）・`cargo fmt --check`・`cargo clippy --all-targets`（警告0）
 - [ ] T2-2 【エージェント】`settings/`（探索・解析・検証）とコマンド `load_and_validate_settings` を実装する
   - 依存: T2-1
   - `parse_settings` / `validate` の単体テスト（省略項目のデフォルト、不正値、パス不在）を書く
