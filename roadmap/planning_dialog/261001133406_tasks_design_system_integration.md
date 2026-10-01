@@ -69,8 +69,11 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - ウィンドウ設定のキー名は tauri-utils 2.9.3 の `config.rs` で確認。両ファイルとも有効なJSONであることを確認済み
     - 未確認: Tauriによるビルド時検証は `icons/icon.ico` がなく `tauri-build` で止まるため、T1-10後の初回ビルドで確認する
     - 未確認: ドラッグ＆ドロップが実際に受信できるかは、T5-7（DropZone）実装後の実機確認で検証する
-- [ ] T1-6 【エージェント】`app.settings.example.json` を作成し、`.gitignore` に `app.settings.json` と `samples/` を追加する
+- [x] T1-6 【エージェント】`app.settings.example.json` を作成し、`.gitignore` に `app.settings.json` と `samples/` を追加する
   - 依存: T1-3
+  - 実施メモ:
+    - ひな形の内容はスペック5.2のサンプルどおり（ダミーパス `C:\ffmpeg\bin\...`・`C:\Program Files\LibreOffice\...`、省略可能3項目はデフォルト値を明記）
+    - `git check-ignore` で、`app.settings.json`・`samples/` 配下（`samples/derived/` を含む）が除外され、`app.settings.example.json` は除外されないことを確認
 - [ ] T1-7 【エージェント】T1-1で確認したパスを使って `app.settings.json` を作成する
   - 依存: T1-1, T1-6
 - [ ] T1-8 【ユーザー】手動検証用に、実際に配布されたpptx（あればppsxも）を `samples/` に置く

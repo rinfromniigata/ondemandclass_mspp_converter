@@ -1,6 +1,10 @@
 roadmap/archived/
 assets/design/ai/
 
+# 実環境の設定と手動検証用サンプル（コミットしない）
+app.settings.json
+samples/
+
 # create-tauri-app (svelte-ts) テンプレート由来
 .DS_Store
 node_modules
