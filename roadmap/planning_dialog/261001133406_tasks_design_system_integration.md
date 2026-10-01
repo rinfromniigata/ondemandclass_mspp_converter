@@ -46,12 +46,19 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `src-tauri/Cargo.lock` もリポジトリに含める
     - 確認: `bun install`・`bun run check`（エラー0）・`bun run build` が成功。`build`・`.svelte-kit`・`node_modules` はignore済み
     - 注意: 既定アイコンを削除したため、T1-10でアイコンを生成するまでRust側（`tauri-build`）のビルドは通らない
-- [ ] T1-4 【エージェント】依存関係を追加する
+- [x] T1-4 【エージェント】依存関係を追加する
   - 依存: T1-3
   - Rust: `zip` `quick-xml` `tempfile` `serde` `serde_json` `tauri-plugin-opener`
   - JS: `@tauri-apps/plugin-opener`、dev: `vitest`
   - `tauri-plugin-dialog` は使わない（v2で変更。上書き確認はアプリ内Dialog）
   - `package.json` に `"test": "vitest run"` を追加し、`vite.config.ts` にテスト設定を追加する
+  - 実施メモ:
+    - Rust: zip 8.6.0（`default-features = false, features = ["deflate"]`）・quick-xml 0.42.0・tempfile 3.27.0 を追加。serde 1.0.229・serde_json 1.0.151・tauri 2.12.1・tauri-plugin-opener 2.7.0 はテンプレートで導入済み
+      - zipの既定featureはzstd（Cビルドが必要）・bzip2・lzma・aes等を含むが、pptx/ppsxはDeflateとStoredしか使わないため `deflate` のみに絞った
+    - JS: vitest 5.0.3 を追加。@tauri-apps/plugin-opener 2.7.0 はテンプレートで導入済み
+    - `vite.config.js` を `vite.config.ts` に置き換え、`vitest/config` の `defineConfig` を使って `test: { environment: "node", include: ["src/**/*.test.ts"] }` を追加
+    - 確認: `bun run check`（エラー0）・`bun run build` は成功。`bun run test` はテストファイルがまだないため「No test files found」で終了コード1になる（T5-6でテストを書けば解消する）
+    - 確認: `cargo check -p zip -p quick-xml -p tempfile` は成功。アプリ本体の `cargo check` は、T1-3の注意どおり `icons/icon.ico` がないため `tauri-build` で失敗する（T1-10で解消する）
 - [ ] T1-5 【エージェント】`tauri.conf.json` と `capabilities/default.json` を設定する
   - 依存: T1-4
   - 識別子・productName・ウィンドウタイトル・サイズ・最小サイズ（480×360）は imple 3.11、権限は imple 3.10
