@@ -25,8 +25,9 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - 4つとも実在する状態で `git status --short -uall` に現れないことを確認（コミット 0eadece 時点で作業ツリーはクリーン）
     - `git check-ignore -v` の該当ルール: `app.settings.json`・`samples/`・`node_modules` はルートの `.gitignore`、`src-tauri/target/` は `src-tauri/.gitignore` の `/target/`
     - `git ls-files` で、4つのパス配下に追跡済みファイルが0件であることも確認（過去に誤ってコミットされていない）
-- [ ] W1-4 【ユーザー】ウィンドウのタイトルバーとタスクバーに、アイコン原本から生成したアプリアイコンが表示されることを確認する
+- [x] W1-4 【ユーザー】ウィンドウのタイトルバーとタスクバーに、アイコン原本から生成したアプリアイコンが表示されることを確認する
   - 依存: T1-10
+  - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方を確認する項目は現行のwalkにない
 
 ## Phase 2: Rust基盤の検証
 - [ ] W2-1 【エージェント】`cargo test` で process・settings の単体テストがすべて通ることを確認する
