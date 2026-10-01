@@ -136,9 +136,16 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `AppState` の `manage` とコマンドの登録はまだ行っていない（T2-3）。登録前に呼ぶと `app.state` がpanicするため、T2-3で必ず両方を行う
     - テスト: settings 12件（parse 5件・validate 3件・load 3件・locate 1件）。全体で `cargo test --lib` 22件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
     - 未確認: 実際の `app.settings.json` を読んだ結果は、T2-3でコマンドを登録してから確認する
-- [ ] T2-3 【エージェント】`lib.rs` にプラグイン・State・コマンドを登録し、`main.rs` を整える
+- [x] T2-3 【エージェント】`lib.rs` にプラグイン・State・コマンドを登録し、`main.rs` を整える
   - 依存: T2-2
   - この時点では未実装のコマンドは登録しない（Phaseごとに追加する）
+  - 実施メモ:
+    - `lib.rs`: opener プラグイン（テンプレートで登録済み）に加え、`.manage(AppState::default())` と `generate_handler![commands::settings::load_and_validate_settings]` を登録。以降のPhaseで実装したコマンドはここへ追加する
+    - `main.rs`: テンプレートのまま（release時の `windows_subsystem = "windows"` と `ondemandclass_mspp_converter_lib::run()` の呼び出しのみ）で imple 3.1 を満たすため変更なし
+    - 実際の `app.settings.json` を、一時的な結合テストで `locate::settings_path()` → `load_and_validate` に通し、`ok: true`・`errors: []` となることを確認（一時テストと `tests/` フォルダは確認後に削除）
+    - 確認: `cargo build` 成功、`cargo test --lib` 22件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - `cargo build` / `cargo test` の結合時に `linker stdout: ライブラリ …dll.lib とオブジェクト …dll.exp を作成中` という警告が1件出る。MSVCリンカーがcdylib作成時に出す情報メッセージを、rustcの `linker_messages` リント（既定でwarn）が表示しているもので、コードの問題ではない。`cargo check` / `clippy` では出ないためT6-1の静的チェックには影響しない。抑制はしていない
+    - 未確認: アプリを起動してフロントから呼ぶ確認は、呼び出し側（T5-1 `tauriCommands.ts`・T5-2 `settings.ts`）の実装後に行う
 
 ## Phase 3: pptx解析
 - [ ] T3-1 【エージェント】`pptx/package.rs`・`pptx/rels.rs` を実装する
