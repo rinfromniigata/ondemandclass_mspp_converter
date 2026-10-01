@@ -18,8 +18,13 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - `cargo build`: 終了コード0、エラーなし（初回2分06秒）。`src-tauri/target/debug/ondemandclass_mspp_converter.exe` が生成された
     - 警告1件: `warning: linker stdout: ライブラリ …ondemandclass_mspp_converter_lib.dll.lib とオブジェクト ….dll.exp を作成中`。MSVCリンカーの情報メッセージを、Rust 1.98で既定有効の `linker_messages` lintが警告として表示しているもの（テンプレートの `crate-type` に `cdylib` が含まれるため）。ビルド結果には影響しない
     - 申し送り: T6-1で `cargo clippy` を `-D warnings` で実行する場合、この警告で失敗する可能性がある。その時点で扱いを判断する
-- [ ] W1-2 【ユーザー】`bun run tauri dev` でウィンドウが開き、タイトルが「オンデマンドスライドコンバーター」であることを確認する
-- [ ] W1-3 【エージェント】`git status` で `app.settings.json`・`samples/`・`node_modules/`・`src-tauri/target/` が追跡対象外であることを確認する
+- [x] W1-2 【ユーザー】`bun run tauri dev` でウィンドウが開き、タイトルが「オンデマンドスライドコンバーター」であることを確認する
+  - 実施メモ: ユーザー報告により完了（問題なし）
+- [x] W1-3 【エージェント】`git status` で `app.settings.json`・`samples/`・`node_modules/`・`src-tauri/target/` が追跡対象外であることを確認する
+  - 実施メモ:
+    - 4つとも実在する状態で `git status --short -uall` に現れないことを確認（コミット 0eadece 時点で作業ツリーはクリーン）
+    - `git check-ignore -v` の該当ルール: `app.settings.json`・`samples/`・`node_modules` はルートの `.gitignore`、`src-tauri/target/` は `src-tauri/.gitignore` の `/target/`
+    - `git ls-files` で、4つのパス配下に追跡済みファイルが0件であることも確認（過去に誤ってコミットされていない）
 - [ ] W1-4 【ユーザー】ウィンドウのタイトルバーとタスクバーに、アイコン原本から生成したアプリアイコンが表示されることを確認する
   - 依存: T1-10
 
