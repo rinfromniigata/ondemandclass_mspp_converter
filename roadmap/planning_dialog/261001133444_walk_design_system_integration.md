@@ -30,7 +30,12 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
   - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方を確認する項目は現行のwalkにない
 
 ## Phase 2: Rust基盤の検証
-- [ ] W2-1 【エージェント】`cargo test` で process・settings の単体テストがすべて通ることを確認する
+- [x] W2-1 【エージェント】`cargo test` で process・settings の単体テストがすべて通ることを確認する
+  - 実施メモ（261001）: `src-tauri` で `cargo test` を実行し、終了コード0。lib の単体テスト22件がすべて成功（失敗・ignore 0）。bin（main.rs）とdoctestは0件
+    - process 6件: 正常終了・非ゼロ終了・タイムアウト（kill）・起動失敗・大量出力でのパイプ詰まりなし・stderr末尾の切り出し
+    - settings 12件: parse 5件（全項目・省略時のデフォルト・不正JSON・必須パスの欠落／型不正・省略可能項目の不正値）、validate 3件（実在・パス不在／フォルダ指定・負の秒数）、load 3件（ファイルなし・BOM付き・検証失敗時に settings が null）、locate 1件
+    - その他: error 2件・state 2件
+    - 結合時に `linker_messages` の警告が1件出るが、T2-3の実施メモのとおりMSVCの情報メッセージで、テスト結果には影響しない
 - [ ] W2-2 【ユーザー】`app.settings.json` の `ffmpegPath` を存在しないパスに変えて `bun run tauri dev` を起動し、idle画面のBannerに「ffmpegPath を確認してください」を含むエラーが出て、ドロップを受け付けないことを確認する
   - 依存: T5-7（画面表示はPhase 5完了後に確認する）
 - [ ] W2-3 【ユーザー】W2-2の状態からパスを正しく直し、「設定を再読み込み」ボタンでエラーが消えることを確認する
