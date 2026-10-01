@@ -12,9 +12,20 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 ---
 
 ## Phase 1: 環境構築
-- [ ] T1-1 【エージェント】開発環境を確認する（bun・rustc/cargo・ffmpeg・ffprobe・soffice のバージョンと実行ファイルパス、WebView2の有無とバージョン）
+- [x] T1-1 【エージェント】開発環境を確認する（bun・rustc/cargo・ffmpeg・ffprobe・soffice のバージョンと実行ファイルパス、WebView2の有無とバージョン）
   - 結果を実施メモに残す
   - WebView2 は `color-mix()` 利用のため Chromium 111 以降であることを確認する
+  - 実施メモ（261001確認）:
+    - bun 1.3.14 : `C:\ProgramData\chocolatey\bin\bun.exe`
+    - rustc 1.98.0 / cargo 1.98.0（toolchain `stable-x86_64-pc-windows-msvc`）: `C:\Users\ofuchirin\.cargo\bin\`
+    - MSVC: Visual Studio Build Tools 2022（17.14.37614.0、VC.Tools.x86.x64あり）
+    - ffmpeg / ffprobe 9.0.2（gyan.dev full_build、winget導入）
+      - PATH上はシンボリックリンク `C:\Users\ofuchirin\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe` / `ffprobe.exe`
+      - 実体: `C:\Users\ofuchirin\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin\ffmpeg.exe`（ffprobe.exe も同フォルダ）
+      - `app.settings.json`（T1-7）には、wingetの更新でフォルダ名が変わっても壊れないLinks側のパスを使う
+    - **soffice: 未インストール**（PATH・Program Files・LocalAppData・scoop・chocolatey・アンインストール情報のいずれにもなし）→ T1-2 で LibreOffice のインストールが必要
+    - WebView2 Runtime 154.0.4258.48（Chromium 111以降の条件を満たす）
+    - 参考: node（`C:\Program Files\nodejs\node.exe`）・git あり
 - [ ] T1-2 【ユーザー】T1-1で不足が見つかったツールをインストールする
   - 依存: T1-1
   - 不足がなければ実施不要としてチェックする
