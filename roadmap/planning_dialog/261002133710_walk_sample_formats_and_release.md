@@ -71,13 +71,29 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - 照合の途中で一度、PowerShell と Rust のファイルの並び順の違いで別ファイルどうしを比べてしまい、見かけ上の不一致が出た。ファイル名の順序（Ordinal）で対応づけ直して再照合した（実装の問題ではない）
 
 ## Phase 4: 音声結合・PDF変換・JSON書き出しの検証
-- [ ] W4-1 【エージェント】`cargo test -- --ignored` で ffmpeg 結合テストがすべて通ることを確認する
+- [x] W4-1 【エージェント】`cargo test -- --ignored` で ffmpeg 結合テストがすべて通ることを確認する
   - 受け入れ基準「形式不一致時の再エンコード切り替え」の確認を兼ねる
-- [ ] W4-2 【エージェント】W4-1の実行前後で、OSの一時フォルダに本アプリ由来の一時ディレクトリが残っていないことを確認する（成功ケース・失敗ケースの両方）
-- [ ] W4-3 【エージェント】`run_soffice_convert` を実ファイルの pptx と ppsx（前編）の両方で実行し、それぞれ `<basename>_slides.pdf` が生成され、入力と同じフォルダに置いた既存の `<basename>.pdf` が変更されていないことを確認する
+  - 実施メモ（261002）: `app.settings.json` の ffmpeg/ffprobe（9.0.2 full_build、WinGet Links）を環境変数 `FFMPEG_PATH`・`FFPROBE_PATH` に設定し、`src-tauri` で `cargo test --test concat_integration -- --ignored` を実行した。9件すべて成功、終了コード0（5.5〜6.1秒、2回実行して2回とも成功）
+    - 再エンコード切り替え: `reencodes_on_sample_rate_mismatch`・`reencodes_on_channel_mismatch`・`reencodes_when_mp3_is_mixed`・`mismatch_is_error_when_reencode_disabled`
+    - copy結合: `copy_mode_with_silence_and_skipped_slides`・`copy_mode_keeps_mono`・`copy_mode_with_multichannel_silence`
+    - エラー: `missing_media_is_error_with_slide_number`・`unreadable_media_is_error_with_slide_number`
+    - 注意: 環境変数を設定せずに実行すると、テストはパスが分からず失敗する（スキップにはならない）
+- [x] W4-2 【エージェント】W4-1の実行前後で、OSの一時フォルダに本アプリ由来の一時ディレクトリが残っていないことを確認する（成功ケース・失敗ケースの両方）
+  - 実施メモ（261002）: 次の3つの方法で確認し、いずれも残りはなかった
+    - テスト内の確認: `concat_integration` は tempfile の一時フォルダを `target/tmp/concat_integration/work` に差し替え、`run()` で `concat_audio` を呼ぶたびに work が空であることを確かめている。失敗ケース3件（再エンコード無効・メディアなし・読めないメディア。いずれも `run()` 経由）を含む9件が成功した。実行後の work と cases も0件
+    - OSの一時フォルダ（`%LOCALAPPDATA%\Temp`）: W4-1の実行前後で、tempfile 既定の名前（`.tmp`＋ランダム文字）のフォルダは0件のまま
+    - 前後の比較で `{GUID}.tmp`（0バイトのファイル）が4件増えていたため調べた。2回目の実行では、テスト中の増減は0件だった。一方、何もしていない40秒の間に1件増え、2件消えた。別の常駐プロセスが作ったり消したりしているもので、本アプリ由来ではないと判断した
+    - 補足: OSの一時フォルダを実際に使う場合（差し替えなし）は、W4-3の PDF変換で `.tmp*` が前後とも0件であることを確認した
+- [x] W4-3 【エージェント】`run_soffice_convert` を実ファイルの pptx と ppsx（前編）の両方で実行し、それぞれ `<basename>_slides.pdf` が生成され、入力と同じフォルダに置いた既存の `<basename>.pdf` が変更されていないことを確認する
   - 依存: T1-8
   - pptx と ppsx は basename が同じため、形式ごとに別の一時フォルダへコピーして実行する
   - スペック15章「ppsxがpptxと同様にPDFを出力する」の確認を兼ねる
+  - 実施メモ（261002）: `#[ignore]` 付きの一時的な結合テストで、`run_soffice_convert` の本体 `convert_to_pdf` を呼んだ（コマンド自体は AppHandle が必要なため）。soffice は `app.settings.json` の LibreOffice、プロファイルはコマンドと同じ `%LOCALAPPDATA%\com.rinfromniigata.ondemandclass-mspp-converter\lo_profile`。一時テストと作業フォルダ（`target/tmp/w4_3/`）は確認後に削除した
+    - 前編の pptx と ppsx を、`target/tmp/w4_3/pptx/` と `target/tmp/w4_3/ppsx/` にそれぞれコピーした。どちらにも内容の分かっている既存の `<basename>.pdf`（ダミー）を置いてから変換した
+    - 両形式とも `<basename>_slides.pdf` が生成され、戻り値は出力パスと一致した。PDFは84,785,720バイト（両形式で同じ）で33ページ（`/Type /Page` と `/Count` がどちらも33。スライド数と一致）。ハッシュは異なる（生成時刻などの差と考えられる）
+    - 既存の `<basename>.pdf` は、内容・更新日時とも変化なし。フォルダ内は入力・既存PDF・`_slides.pdf` の3ファイルだけ
+    - 所要時間: pptx 21.6秒（1回目でプロファイル準備を含む）、ppsx 11.2秒。終了後に soffice のプロセスは残っていない
+    - OSの一時フォルダの `.tmp*` は前後とも0件（W4-2の補足）
 
 ## Phase 5: フロントエンド・デザインシステムの検証
 - [ ] W5-1 【エージェント】`bun run check` と `bun run test` がエラーなく完了することを確認する
