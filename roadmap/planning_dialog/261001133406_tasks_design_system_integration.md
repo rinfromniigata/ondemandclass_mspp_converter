@@ -367,9 +367,11 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 依存: T5-3
   - `onStart` / `onProgress` の2つのコールバックを持つ（v2）
   - 実施メモ: Step群の型を `PipelineSteps` として export した（T5-5の `createOrchestrator` で使う）。pptx解析が成功しても `data` が無い場合は失敗として扱い、後続を止める（音声結合の `data` が無い場合も同様にJSONを実行しない）。`failedSteps` の順は音声結合→PDF変換→タイムスタンプ書き出し。`npm run check` でエラー0件。モックStepで、全成功・音声失敗・PDF失敗・解析失敗の4通りについて、コールバックの順序と `RunSummary` を手元で確認済み
-- [ ] T5-5 【エージェント】`pipelineController.ts` を実装する
+- [x] T5-5 【エージェント】`pipelineController.ts` を実装する
   - 依存: T5-2, T5-4, T5-10
   - 上書き確認は注入された `confirm`（既定は `confirmDialog.requestConfirm`）で行う（v2）
+  - 実施メモ: ユーザーの指示により、未完了だった依存項目T5-10を先に実施してから着手した
+  - 実施メモ: 受付判定〜上書き確認の間は `view` が `idle` のままなので、`view` の判定に加えて内部の `busy` フラグで二重起動を防ぐ。設定が未検証のときは状態を変えずに return する（設定エラーはDropZoneが表示するため）。受付拒否の `notice` は「ファイルは1つずつドロップしてください」「pptx または ppsx ファイルをドロップしてください」。`check_outputs_exist` が失敗した場合は `notice` に理由を入れて idle に戻す。上書き確認の `details` には既存ファイルのファイル名だけを並べる。依存の `commands` の型は `Pick<Commands, "checkOutputsExist">` に絞った。`npm run check` でエラー0件。モック依存で、受付拒否2種・上書きのキャンセル／承諾・`running` の遷移・done／error の判定を手元で確認済み
 - [ ] T5-6 【エージェント】Vitestの単体テストを書く（imple 6.2 の対象すべて）
   - 依存: T5-5
 - [ ] T5-7 【エージェント】`+layout.ts`・`+page.svelte` と画面コンポーネント（DropZone・Wizard・ProcessingView・ResultView・ConfirmDialog）を実装する
@@ -381,9 +383,10 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 - [ ] T5-9 【エージェント】基本部品7種とアイコン用小コンポーネントを `src/lib/components/ui/` に実装する
   - 依存: T5-8
   - Props は imple 5.3。全部品で enabled/hover/focus/pressed/disabled を確認できるようにする
-- [ ] T5-10 【エージェント】`confirmDialog.ts` を実装する
+- [x] T5-10 【エージェント】`confirmDialog.ts` を実装する
   - 依存: T5-1
   - imple 4.7
+  - 実施メモ: T5-5の依存として、ユーザーの指示によりT5-5より先に実施した。`resolve` は1回だけ有効で、置き換えられた後の古い要求の `resolve` は無視する。`pendingConfirm` は読み取り専用のストアとして公開する（型 `PendingConfirm` も export）。前の要求が置き換え時に `false` で解決されること、解決後にストアが `null` に戻ることを手元で確認済み
 - [ ] T5-11 【エージェント】コントラスト確認スクリプト `scripts/contrast-check.ts` を作成し、実行結果を実施メモに残す
   - 依存: T1-9
   - imple 6.3。4.5:1未満の組み合わせが見つかった場合は、使い方（どの部品のどの文字に使うか）の見直しで解決し、トークン値は変更しない。解決できない場合は仕様変更として扱う
