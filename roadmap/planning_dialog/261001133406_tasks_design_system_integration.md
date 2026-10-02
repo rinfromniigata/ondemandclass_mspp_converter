@@ -357,8 +357,9 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 依存: T1-4
   - `PipelineState.processing` に `running` を含める（v2）
   - 実施メモ: `AppSettings`・`SettingsStatus`・`ConcatResult` に加え、`SilentSlideHandling`（`"insert_silence" | "skip"`）と `runFfmpegConcat` の引数型 `FfmpegConcatArgs` も `tauriCommands.ts` で定義した。各コマンドの引数名はRust側の `#[tauri::command]` と照合済み。`npm run check` でエラー0件
-- [ ] T5-2 【エージェント】`outputPaths.ts`・`settings.ts`・`pipelineStore.ts` を実装する
+- [x] T5-2 【エージェント】`outputPaths.ts`・`settings.ts`・`pipelineStore.ts` を実装する
   - 依存: T5-1
+  - 実施メモ: `resolveOutputPaths` は最後の区切り（`\` か `/`）で分割し、その区切り文字で出力パスを組み立てる。区切りのない入力は `dir: ""` とし、ファイル名だけのパスを返す。`reloadSettings` はテスト用に `commands` を引数で差し替えられる（既定は `commands`）。`npm run check` でエラー0件。Windows形式・POSIX形式・混在のパスで出力を手元確認済み（単体テストはT5-6で作成）
 - [ ] T5-3 【エージェント】4つのStep（`buildSegments` を含む）を実装する
   - 依存: T5-1
 - [ ] T5-4 【エージェント】`orchestrator.ts` を実装する
