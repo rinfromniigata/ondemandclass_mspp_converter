@@ -372,8 +372,9 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 上書き確認は注入された `confirm`（既定は `confirmDialog.requestConfirm`）で行う（v2）
   - 実施メモ: ユーザーの指示により、未完了だった依存項目T5-10を先に実施してから着手した
   - 実施メモ: 受付判定〜上書き確認の間は `view` が `idle` のままなので、`view` の判定に加えて内部の `busy` フラグで二重起動を防ぐ。設定が未検証のときは状態を変えずに return する（設定エラーはDropZoneが表示するため）。受付拒否の `notice` は「ファイルは1つずつドロップしてください」「pptx または ppsx ファイルをドロップしてください」。`check_outputs_exist` が失敗した場合は `notice` に理由を入れて idle に戻す。上書き確認の `details` には既存ファイルのファイル名だけを並べる。依存の `commands` の型は `Pick<Commands, "checkOutputsExist">` に絞った。`npm run check` でエラー0件。モック依存で、受付拒否2種・上書きのキャンセル／承諾・`running` の遷移・done／error の判定を手元で確認済み
-- [ ] T5-6 【エージェント】Vitestの単体テストを書く（imple 6.2 の対象すべて）
+- [x] T5-6 【エージェント】Vitestの単体テストを書く（imple 6.2 の対象すべて）
   - 依存: T5-5
+  - 実施メモ: テストは対象と同じフォルダに置いた（`src/lib/outputPaths.test.ts`・`src/lib/steps/audioConcatStep.test.ts`・`src/lib/orchestrator.test.ts`・`src/lib/pipelineController.test.ts`・`src/lib/confirmDialog.test.ts`）。imple 6.2 の観点に加え、音声結合とPDF変換の並列実行と到着順の通知、上書き確認中の二重ドロップ無視、出力先の存在確認の失敗、置き換え後の古い `resolve` の無視も確認する。`bun run test` で5ファイル・55件すべて成功（vitest 5.0.3）。T1-4の実施メモにある「No test files found」による終了コード1も解消した。`npm run check` でエラー0件
 - [ ] T5-7 【エージェント】`+layout.ts`・`+page.svelte` と画面コンポーネント（DropZone・Wizard・ProcessingView・ResultView・ConfirmDialog）を実装する
   - 依存: T5-5, T5-8, T5-9
   - 画面の構成は imple 5.4。色・影・角丸の値を直接書かない
