@@ -39,18 +39,36 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - settings 12件: parse 5件（全項目・省略時のデフォルト・不正JSON・必須パスの欠落／型不正・省略可能項目の不正値）、validate 3件（実在・パス不在／フォルダ指定・負の秒数）、load 3件（ファイルなし・BOM付き・検証失敗時に settings が null）、locate 1件
     - その他: error 2件・state 2件
     - 結合時に `linker_messages` の警告が1件出るが、T2-3の実施メモのとおりMSVCの情報メッセージで、テスト結果には影響しない
-- [ ] W2-2 【ユーザー】`app.settings.json` の `ffmpegPath` を存在しないパスに変えて `bun run tauri dev` を起動し、idle画面のBannerに「ffmpegPath を確認してください」を含むエラーが出て、ドロップを受け付けないことを確認する
+- [x] W2-2 【ユーザー】`app.settings.json` の `ffmpegPath` を存在しないパスに変えて `bun run tauri dev` を起動し、idle画面のBannerに「ffmpegPath を確認してください」を含むエラーが出て、ドロップを受け付けないことを確認する
   - 依存: T5-7（画面表示はPhase 5完了後に確認する）
-- [ ] W2-3 【ユーザー】W2-2の状態からパスを正しく直し、「設定を再読み込み」ボタンでエラーが消えることを確認する
+  - 実施メモ: ユーザー報告により完了（問題なし）
+- [x] W2-3 【ユーザー】W2-2の状態からパスを正しく直し、「設定を再読み込み」ボタンでエラーが消えることを確認する
   - 依存: W2-2
+  - 実施メモ: ユーザー報告により完了（問題なし）
 
 ## Phase 3: pptx解析の検証
-- [ ] W3-1 【エージェント】`cargo test` で pptx 解析の単体テスト・結合テストがすべて通ることを確認する
+- [x] W3-1 【エージェント】`cargo test` で pptx 解析の単体テスト・結合テストがすべて通ることを確認する
   - 受け入れ基準「sldIdLst順で表示順が確定」「p:timing順で結合」の確認を兼ねる
-- [ ] W3-2 【エージェント】`samples/` の実ファイル（前編のpptx・ppsx、後編のppsx）に対して `extract_pptx` 相当の処理を実行し（テスト用の `#[ignore]` テストまたはデバッグ出力）、スライド数・音声の有無・advTm が PowerPoint 上の内容と一致するかを実施メモに記録する
+  - 実施メモ（261002）: `src-tauri` で `cargo test` を実行し、終了コード0、エラー・警告なし
+    - lib の単体テスト120件すべて成功。うち pptx 47件（package 10・presentation 12・rels 7・slide 15・mod 3）
+    - 結合テスト `tests/pptx_extract.rs` 9件すべて成功。受け入れ基準に当たるのは `display_order_follows_sld_id_list_not_file_numbers_or_rels`（sldIdLst順）と `two_audios_follow_timing_order_not_rels_or_tree_order`（p:timing順）。`ppsx_gives_same_result_as_pptx` も成功
+    - `tests/concat_integration.rs` の9件は `#[ignore]`（ffmpeg が必要。W4-1 で実行する）
+- [x] W3-2 【エージェント】`samples/` の実ファイル（前編のpptx・ppsx、後編のppsx）に対して `extract_pptx` 相当の処理を実行し（テスト用の `#[ignore]` テストまたはデバッグ出力）、スライド数・音声の有無・advTm が PowerPoint 上の内容と一致するかを実施メモに記録する
   - 依存: T1-8
   - 前編の pptx と ppsx で、結果（`SlideAudioMap` のJSON）が完全に一致することも確認する
   - 無音スライドの有無も記録する（W6-8・T6-2 の一部無音版の前提）
+  - 実施メモ（261002）: `#[ignore]` 付きの一時的な結合テストで、3ファイルを `extract_from_file`（`extract_pptx` の本体）に通した。一時テストは確認後に削除した（T3-2〜T3-4 と同じ方法）
+    - 結果（3ファイル共通）: 33枚、音声あり33枚、無音スライド0枚、1枚に音声が複数あるスライド0枚、リンク切れ0、動画0、警告なし、advTm 33件。スライドは sldIdLst 順に slide1〜33.xml、音声はスライド n が `ppt/media/media{n}.m4a`
+    - advTm の範囲: 前編は7.492〜266.992秒、後編は8.001〜287.22秒
+    - 前編の pptx と ppsx で、`SlideAudioMap` のJSON（整形後7,639バイト）がハッシュで完全に一致した
+    - 所要時間（debugビルド）: 0.20〜0.36秒
+    - PowerPoint 上の内容との照合: エージェントは PowerPoint を操作できないため、Rust実装とは別に、PowerShell（`System.IO.Compression` と正規表現）で zip 内のXMLを直接読んで照合した。3ファイルとも全33枚で次が一致した（不一致0）
+      - `presentation.xml` の sldIdLst の件数と、rels で解決したスライドのパート名
+      - 各スライドの advTm（`mc:AlternateContent` の両分岐の値が同じであることも確認）
+      - `a:audioFile` の `r:link` から rels で解決したメディア名。外部リンク・`a:videoFile` はない
+    - 補足: advTm は各スライドの音声の実際の長さ（ffprobe）より、前編は0.044〜0.608秒（平均0.185秒）、後編は0.033〜0.168秒（平均0.093秒）長い。「音声の再生が終わったら次のスライドへ進む」という PowerPoint の自動切り替え設定と合っている
+    - 無音スライドがないため、W6-8 用の一部無音版は T6-2 で作る必要がある（T6-2 の記載どおり）
+    - 照合の途中で一度、PowerShell と Rust のファイルの並び順の違いで別ファイルどうしを比べてしまい、見かけ上の不一致が出た。ファイル名の順序（Ordinal）で対応づけ直して再照合した（実装の問題ではない）
 
 ## Phase 4: 音声結合・PDF変換・JSON書き出しの検証
 - [ ] W4-1 【エージェント】`cargo test -- --ignored` で ffmpeg 結合テストがすべて通ることを確認する
