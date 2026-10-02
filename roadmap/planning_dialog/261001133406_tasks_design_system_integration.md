@@ -375,9 +375,15 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 - [x] T5-6 【エージェント】Vitestの単体テストを書く（imple 6.2 の対象すべて）
   - 依存: T5-5
   - 実施メモ: テストは対象と同じフォルダに置いた（`src/lib/outputPaths.test.ts`・`src/lib/steps/audioConcatStep.test.ts`・`src/lib/orchestrator.test.ts`・`src/lib/pipelineController.test.ts`・`src/lib/confirmDialog.test.ts`）。imple 6.2 の観点に加え、音声結合とPDF変換の並列実行と到着順の通知、上書き確認中の二重ドロップ無視、出力先の存在確認の失敗、置き換え後の古い `resolve` の無視も確認する。`bun run test` で5ファイル・55件すべて成功（vitest 5.0.3）。T1-4の実施メモにある「No test files found」による終了コード1も解消した。`npm run check` でエラー0件
-- [ ] T5-7 【エージェント】`+layout.ts`・`+page.svelte` と画面コンポーネント（DropZone・Wizard・ProcessingView・ResultView・ConfirmDialog）を実装する
+- [x] T5-7 【エージェント】`+layout.ts`・`+page.svelte` と画面コンポーネント（DropZone・Wizard・ProcessingView・ResultView・ConfirmDialog）を実装する
   - 依存: T5-5, T5-8, T5-9
   - 画面の構成は imple 5.4。色・影・角丸の値を直接書かない
+  - 実施メモ: `+layout.ts`（`ssr = false`）はテンプレートのものをそのまま使う。処理ログの表示は ProcessingView と ResultView（ログ詳細）で共通なので `components/StepLog.svelte` にまとめた。成果物一覧の種別表示のため、アイコンに `FileIcon` を追加した（種別は文字ラベル「結合音声」「スライドPDF」「タイムスタンプ」でも示す）
+  - 実施メモ: imple から補った点：pptx解析中の判定は「完了したステップがまだない」こととした（解析は必ず最初に単独で実行されるため、ステップ名の文字列に依存しない）。処理ログは1枚の Card にまとめた。ResultView は失敗の Banner（`role="alert"`、メッセージを太字）→警告の Banner→成果物一覧の順に並べる。仕分けトレイのモチーフは成果物が1つ以上あるときだけ表示する。「出力フォルダを開く」は1つ目の成果物を `revealItemInDir` で選択表示し、失敗したら Banner で理由を出す。設定が未検証の間は、ドラッグしても浮き上がらず、ドロップも渡さない。画面の切り替えは `{#key view}` と不透明度のアニメーション（`--motion-duration-base`）で行う
+  - 実施メモ: Windowsパスはすべて等幅フォント（`--font-family-mono`）で表示する（T5-9の注意への対応）。ステップの失敗メッセージは本文フォントのまま
+  - 実施メモ: 開発用の確認ページ `/dev/screens` を追加した（`?screen=processing-extract|processing|done|partial|failed|dialog`、`?theme=light|dark`）。Tauri を使わずにサンプルの状態で ProcessingView・ResultView・ConfirmDialog を表示する。本番ビルドでは404。DropZone は Tauri のドラッグ&ドロップAPIが必要なため、実アプリ（walk W5）で確認する
+  - 実施メモ: 組み立ての途中で、完了済み項目の部品に手を入れた（Dialog の中央寄せ、ListItem の警告時アイコン、Card の `class` 結合、`fileNameOf` の共通化）。詳細は `roadmap/development/261002123002_fix_screen_integration_adjustments.md`
+  - 実施メモ: `bun run check` でエラー0件、`bun run test` で55件すべて成功、`bun run build` 成功。画面コンポーネントに色・影・角丸の直書きがないことを grep で確認済み（仕分けトレイのSVG内の `rx` はイラストの形状で、部品の角丸ではない）。`/dev/screens` の各画面をライト・ダークでスクリーンショット確認済み
 - [x] T5-8 【エージェント】`base.css`（リセット・フォーカスリング・状態レイヤー・elevation/shapeユーティリティ・reduced-motion）と `+layout.svelte` を作る
   - 依存: T1-9
   - imple 5.1・5.2

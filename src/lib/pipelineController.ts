@@ -2,7 +2,7 @@
 import { get, type Writable } from "svelte/store";
 import { requestConfirm, type ConfirmRequest } from "./confirmDialog";
 import { PipelineOrchestrator } from "./orchestrator";
-import { isSupportedInput, resolveOutputPaths } from "./outputPaths";
+import { fileNameOf, isSupportedInput, resolveOutputPaths } from "./outputPaths";
 import { pipelineState } from "./pipelineStore";
 import { settingsStatus } from "./settings";
 import { AudioConcatStep } from "./steps/audioConcatStep";
@@ -22,11 +22,6 @@ export interface PipelineControllerDeps {
 
 export interface PipelineController {
   startConversion(paths: string[]): Promise<void>;
-}
-
-/** パス末尾のファイル名（`\` と `/` の両方を区切りとして扱う） */
-function fileName(path: string): string {
-  return path.slice(Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1);
 }
 
 export function createPipelineController(deps: PipelineControllerDeps): PipelineController {
@@ -74,7 +69,7 @@ export function createPipelineController(deps: PipelineControllerDeps): Pipeline
       const ok = await deps.confirm({
         title: "上書きしますか？",
         message: "出力先に同じ名前のファイルがあります。",
-        details: existing.map(fileName),
+        details: existing.map(fileNameOf),
         confirmLabel: "上書きする",
         cancelLabel: "キャンセル",
       });

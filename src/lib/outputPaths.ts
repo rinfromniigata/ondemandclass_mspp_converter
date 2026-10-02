@@ -9,6 +9,11 @@ export function isSupportedInput(path: string): boolean {
   return SUPPORTED_EXTENSION.test(path);
 }
 
+/** パス末尾のファイル名（`\` と `/` の両方を区切りとして扱う） */
+export function fileNameOf(path: string): string {
+  return path.slice(Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")) + 1);
+}
+
 /** `\` と `/` の両方を区切りとして扱い、出力先は入力で使われていた区切りで組み立てる */
 export function resolveOutputPaths(inputPath: string): OutputPaths {
   const sepIndex = Math.max(inputPath.lastIndexOf("\\"), inputPath.lastIndexOf("/"));

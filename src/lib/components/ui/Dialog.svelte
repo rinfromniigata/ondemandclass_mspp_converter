@@ -49,6 +49,8 @@
   .dialog {
     width: min(560px, calc(100vw - 2 * var(--space-lg)));
     max-height: calc(100vh - 2 * var(--space-lg));
+    /* base.css のリセット（margin: 0）で失われる中央寄せを戻す */
+    margin: auto;
     padding: var(--space-lg);
     border: none;
     background: var(--color-surface);

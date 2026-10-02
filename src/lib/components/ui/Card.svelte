@@ -10,6 +10,7 @@
     elevation = 1,
     dragged = false,
     disabled = false,
+    class: className = "",
     children,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
@@ -24,7 +25,7 @@
 </script>
 
 <div
-  class="card shape-lg elevation-{level}"
+  class="card shape-lg elevation-{level} {className}"
   class:state-layer={dragged}
   class:dragged
   class:disabled

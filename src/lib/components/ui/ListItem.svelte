@@ -6,7 +6,6 @@
   import ProgressIndicator from "./ProgressIndicator.svelte";
   import ErrorIcon from "./icons/ErrorIcon.svelte";
   import SuccessIcon from "./icons/SuccessIcon.svelte";
-  import WarningIcon from "./icons/WarningIcon.svelte";
 
   type Status = "running" | "success" | "warning" | "error";
 
@@ -32,10 +31,9 @@
   <span class="leading">
     {#if status === "running"}
       <ProgressIndicator size="sm" label="{label}を処理中" />
-    {:else if status === "success"}
+    {:else if status === "success" || status === "warning"}
+      <!-- 完了（警告あり）も成功アイコン。警告であることは状態ラベルで示す（スペック8章） -->
       <SuccessIcon size={24} />
-    {:else if status === "warning"}
-      <WarningIcon size={24} />
     {:else}
       <ErrorIcon size={24} />
     {/if}
@@ -71,12 +69,9 @@
     display: none;
   }
 
-  .success .leading {
-    color: var(--color-success);
-  }
-
+  .success .leading,
   .warning .leading {
-    color: var(--color-warning);
+    color: var(--color-success);
   }
 
   .error .leading {
