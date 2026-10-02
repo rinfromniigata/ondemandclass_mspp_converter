@@ -383,9 +383,15 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - imple 5.1・5.2
   - 実施メモ: T5-7の依存として、ユーザーの指示によりT5-7より先にこの項目だけを実施した（T5-9・T5-7は次の指示待ち）
   - 実施メモ: imple 5.1・5.2 に加えて次を追加した。`data-theme` 指定時の `color-scheme` の固定、`html, body { height: 100% }`、`button`/`input` のフォント継承、ドラッグオーバー用の `.state-layer.dragged`（opacity は `--state-layer-opacity-dragged`）、無効状態（`:disabled` / `aria-disabled="true"`）では状態レイヤーを出さない指定、読み上げ専用の `.visually-hidden`。トークンを使わない数値は、スペック3章で固定されたフォーカスリングの `2px` と、`.visually-hidden` の定型値（`1px` 等）だけ。`bun run check` でエラー0件、`bun run build` 成功。ビルド後のCSSで tokens.css → base.css の順に並ぶこと、reduced-motion の上書き（圧縮後は `0s`）が残ることを確認済み
-- [ ] T5-9 【エージェント】基本部品7種とアイコン用小コンポーネントを `src/lib/components/ui/` に実装する
+- [x] T5-9 【エージェント】基本部品7種とアイコン用小コンポーネントを `src/lib/components/ui/` に実装する
   - 依存: T5-8
   - Props は imple 5.3。全部品で enabled/hover/focus/pressed/disabled を確認できるようにする
+  - 実施メモ: 部品7種は imple 5.3 の Props どおり。アイコンは共通枠 `icons/IconBase.svelte` と5種（Success・Error・Warning・ArrowDown・Folder）。いずれも `currentColor` で描き、`title` を渡したときだけ読み上げ対象になる
+  - 実施メモ: 確認方法として、開発時だけ開けるページ `src/routes/dev/ui/`（`bun run dev` で `http://127.0.0.1:1420/dev/ui`）を追加した。本番ビルドでは `+page.ts` が404を返す。全部品の状態を並べて表示し、テーマ切り替えボタンと `?theme=light|dark` 指定にも対応する
+  - 実施メモ: hover／focus／pressed を持つのは操作できる部品（Button、Dialog・Banner内のボタン）だけ。ListItem・ProgressIndicator・StatusChip・Banner は操作対象ではないため、状態レイヤーを付けていない。Card は disabled と dragged を持つ
+  - 実施メモ: imple から補った点：Text Button の文字色は `--color-text`（primary 系の文字色は4.5:1を満たさないため）。Dialog の Esc は `cancel` イベントを止めて `onclose` を呼ぶだけで、閉じるかどうかは `open` で呼び出し側が決める。ProgressIndicator の回転周期は1秒で、ListItem 内では reduced-motion 時の代替ラベルを隠す（状態ラベル「処理中」があるため）。StatusChip は高さ32px・1pxの枠線（`--color-border`）
+  - 実施メモ: `bun run check` でエラー0件、`bun run build` 成功。色・影・角丸の直書きがないことを grep で確認済み。ヘッドレスEdgeでライト・ダーク両方のスクリーンショットを撮り、崩れがないことを確認済み
+  - 注意（T5-7向け）: 和文フォント（Yu Gothic UI）では `\` が `¥` で表示される。Windowsパスを表示する箇所は等幅フォント（`--font-family-mono`）を使うこと（imple 5.4 の ResultView・ConfirmDialog のとおり）。ListItem の `detail` にパスが入る場合も同様に配慮する
 - [x] T5-10 【エージェント】`confirmDialog.ts` を実装する
   - 依存: T5-1
   - imple 4.7
