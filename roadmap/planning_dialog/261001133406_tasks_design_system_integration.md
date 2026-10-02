@@ -336,9 +336,21 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 3秒で打ち切ると3.3秒で `ProcessTimeout` になり、`soffice.bin` は残らない。その直後の変換も成功する
     - 120秒のタイムアウトは84MBのppsxで2回目9.4秒・初回18.4秒のため余裕がある
     - 未確認: フロントからの呼び出しは T5-1 以降。macOS では子孫を終了しない（Windows以外は直接の子だけ）
-- [ ] T4-6 【エージェント】コマンド `check_outputs_exist`・`write_timestamps_json` を実装し、登録する
+- [x] T4-6 【エージェント】コマンド `check_outputs_exist`・`write_timestamps_json` を実装し、登録する
   - 依存: T2-3
   - JSONの丸め（小数3桁）と書き出し形式に単体テストを書く
+  - 実施メモ:
+    - `commands/output_files.rs` は imple 3.8 どおり。純粋関数とファイル操作は同じファイル内の非公開関数にした
+      - `existing_paths`：`Path::exists()` で絞り込み、渡された順を保つ
+      - `format_timestamps_json`：`(x * 1000.0).round() / 1000.0` で丸め、`serde_json::to_string_pretty`（インデント2）に末尾の改行を付ける
+      - `write_atomically`：書き出し先と同じフォルダに `NamedTempFile` を作って書き、`persist` で置き換える（既存ファイルは置き換え。失敗時は一時ファイルがDropで消える）
+    - 両コマンドとも `async`（`State` を受けないため `Result` は不要）。`check_outputs_exist` の戻り値は `Vec<String>`、`write_timestamps_json` は書き出したパス（受け取った `out_path` そのまま）
+    - imple にない扱い:
+      - 秒が NaN・無限の場合は「スライド{n}の時刻が不正です（…）」のエラーにする（serde_json は NaN を `null` にしてしまうため）
+      - 丸めた結果の `-0.0` は `0.0` にする
+    - `lib.rs` に2コマンドを登録した。これで imple 3.9 の6コマンドがすべて登録済みになったため、「各Phaseで実装したコマンドをここへ追加する」のコメントを削除した
+    - テスト: output_files 8件（丸め・スペック7章のスキーマとの完全一致・空配列・NaN・存在確認の順序・既存ファイルの置き換えと一時ファイルが残らないこと・フォルダなし・コマンド経由の日本語ファイル名での書き出し）。全体で `cargo test` 単体120件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし、`cargo build` 成功
+    - 未確認: フロントからの呼び出しは T5-1 以降
 
 ## Phase 5: フロントエンド
 - [ ] T5-1 【エージェント】`steps/types.ts`・`tauriCommands.ts` を実装する
