@@ -17,6 +17,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::settings::load_and_validate_settings,
             commands::pptx_extract::extract_pptx,
+            commands::audio_process::run_ffmpeg_concat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

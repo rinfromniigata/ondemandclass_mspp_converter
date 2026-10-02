@@ -274,8 +274,26 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 処理は、表示順のスライドごとに、先頭から同じ slide_index の区間を消費して累積する。区間を持たないスライドはその時点の累積値で start = end
       - 丸め（小数3桁）は行わない（T4-6 の JSON 書き出しで行う）
     - テスト: plan 6件（copy・サンプルレート不一致・チャンネル不一致・AAC以外・上限2ch・空入力）、timeline 10件（1区間ずつ・複数区間のスライド・skip時の長さ0・先頭が無音区間・先頭がskip・末尾がskip・空入力・順序不正・未知のスライド・不正な秒）。全体で `cargo test` 単体92件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
-- [ ] T4-3 【エージェント】`audio/concat.rs` とコマンド `run_ffmpeg_concat` を実装し、登録する
+- [x] T4-3 【エージェント】`audio/concat.rs` とコマンド `run_ffmpeg_concat` を実装し、登録する
   - 依存: T3-1, T4-2
+  - 実施メモ:
+    - `audio/mod.rs` に `AudioSegment`（`tag = "kind"`、各バリアントも camelCase）・`slide_index()`・`ConcatResult` を追加。TSの判別共用体と同じJSONになることを単体テストで確認
+    - `concat.rs`：入口は `concat_audio(&FfmpegTools { ffmpeg, ffprobe }, input, slide_indices, segments, out_path, reencode_on_mismatch) -> Result<ConcatResult, AppError>`。手順は imple 3.6 どおりで、次の点を補った
+      - 外部プロセスを起動する前に区間列を検証する（`validate_segments`）。空なら「結合する音声区間がありません」、無音区間の秒が0以下・有限でなければエラー、並び順は `build_timeline` に長さ0で通して確かめる
+      - pptx は `media` 区間があるときだけ開く。音声の書き出し・probe・正規化の失敗は「スライド{n}の音声（{パート名}）：…」、無音生成の失敗は「スライド{n}の無音区間を生成できません：…」を付ける
+      - copy 方式からの再試行は、**結合（concat）の ffmpeg が非ゼロ終了（`ProcessFailed`）した場合だけ**（スペック5章どおり）。起動失敗・タイムアウトは再試行せずエラーにする。再試行時のチャンネル数は copy 時のチャンネル数を2以下に収めた値
+      - 無音生成のチャンネルレイアウトは 1=`mono`、2=`stereo`、3以上=`{n}c`（T4-2 の注意点への対応。ffmpeg 9.0.2 で `3c`→2.1、`6c`→5.1 として生成できることを確認）。copy 方式の無音の長さは指定秒（実測で `-t 2.5` の AAC が 2.500000 秒になることを確認）
+      - concat のリストは一時フォルダ内の相対名（`part_{i}.{拡張子}`）だけを書く。拡張子が英数字でない場合は `bin` にする
+      - copy の結合は `-vn -c copy`、再エンコードの正規化は `-map 0:a:0`（カバー画像等の映像ストリームを除くため）
+      - timestamp は `out_path` へ移動する前に計算する。移動は `fs::rename`（既存ファイルは置き換え）、失敗したら `fs::copy`。コピー元は一時フォルダごとDropで削除される
+    - コマンド `commands/audio_process.rs`：`run_ffmpeg_concat(state, input_path, slide_indices, segments, out_path, reencode_on_mismatch)`。`State<'_, AppState>` から設定を複製し（未読み込みなら「設定が読み込まれていません」）、`spawn_blocking` で `concat_audio` を実行する。`JoinError` は「音声結合を実行できませんでした（…）」
+    - `lib.rs` の `generate_handler!` に `commands::audio_process::run_ffmpeg_concat` を登録
+    - テスト: concat 10件（区間列の検証4件・チャンネルレイアウト・無音の引数・ファイル名・リスト・既存出力の置き換え・ツール起動前の検証）、mod 2件（JSON形式）。全体で `cargo test` 単体104件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 実ファイル確認: 一時的な結合テストで、`samples/` のppsx（前編）のスライド1の音声＋スライド2の無音2秒＋スライド3（区間なし）＋スライド4の音声を実際の ffmpeg/ffprobe で結合した（一時テストは確認後に削除）
+      - copy 方式（`reencoded: false`）、debugビルドで約0.7秒
+      - timestamp: 1=0〜34.830249、2=34.830249〜36.830249、3=36.830249（長さ0）、4=36.830249〜184.333356
+      - 出力は aac / 44100Hz / 2ch、長さ 184.333356秒で、最後の endSec と一致
+    - 未確認: 再エンコード方式・再試行・一時フォルダが残らないことは T4-4 の結合テストで確認する。フロントからの呼び出しは T5-1 以降
 - [ ] T4-4 【エージェント】ffmpegを使う結合テスト（`#[ignore]`）を書き、実行する
   - 依存: T4-3, T1-7
   - サンプルレート不一致・チャンネル数不一致・MP3混在で再エンコードに切り替わること、無音挿入、一時ディレクトリが残らないことを確認する
