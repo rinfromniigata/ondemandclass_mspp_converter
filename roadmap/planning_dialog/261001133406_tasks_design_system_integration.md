@@ -363,9 +363,10 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 - [x] T5-3 【エージェント】4つのStep（`buildSegments` を含む）を実装する
   - 依存: T5-1
   - 実施メモ: `name` は「pptx解析」「音声結合」「PDF変換」「タイムスタンプ書き出し」。`AudioConcatStep` は設定が必須のため、コンストラクタの引数を `(settings, cmd = commands)` の順にした（他のStepは `(cmd = commands)`）。モック注入しやすいよう、各Stepの `cmd` の型は使うコマンドだけの `Pick<Commands, ...>` とした。`run_ffmpeg_concat` の `slideIndices` には全スライドを表示順で渡す（音声のないスライドにもタイムスタンプを出すため）。`npm run check` でエラー0件。`buildSegments`（insert_silence／skip／advTm優先／0秒）と、音声なし・invoke例外時の失敗結果を手元で確認済み
-- [ ] T5-4 【エージェント】`orchestrator.ts` を実装する
+- [x] T5-4 【エージェント】`orchestrator.ts` を実装する
   - 依存: T5-3
   - `onStart` / `onProgress` の2つのコールバックを持つ（v2）
+  - 実施メモ: Step群の型を `PipelineSteps` として export した（T5-5の `createOrchestrator` で使う）。pptx解析が成功しても `data` が無い場合は失敗として扱い、後続を止める（音声結合の `data` が無い場合も同様にJSONを実行しない）。`failedSteps` の順は音声結合→PDF変換→タイムスタンプ書き出し。`npm run check` でエラー0件。モックStepで、全成功・音声失敗・PDF失敗・解析失敗の4通りについて、コールバックの順序と `RunSummary` を手元で確認済み
 - [ ] T5-5 【エージェント】`pipelineController.ts` を実装する
   - 依存: T5-2, T5-4, T5-10
   - 上書き確認は注入された `confirm`（既定は `confirmDialog.requestConfirm`）で行う（v2）
