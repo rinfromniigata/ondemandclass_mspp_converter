@@ -360,8 +360,9 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 - [x] T5-2 【エージェント】`outputPaths.ts`・`settings.ts`・`pipelineStore.ts` を実装する
   - 依存: T5-1
   - 実施メモ: `resolveOutputPaths` は最後の区切り（`\` か `/`）で分割し、その区切り文字で出力パスを組み立てる。区切りのない入力は `dir: ""` とし、ファイル名だけのパスを返す。`reloadSettings` はテスト用に `commands` を引数で差し替えられる（既定は `commands`）。`npm run check` でエラー0件。Windows形式・POSIX形式・混在のパスで出力を手元確認済み（単体テストはT5-6で作成）
-- [ ] T5-3 【エージェント】4つのStep（`buildSegments` を含む）を実装する
+- [x] T5-3 【エージェント】4つのStep（`buildSegments` を含む）を実装する
   - 依存: T5-1
+  - 実施メモ: `name` は「pptx解析」「音声結合」「PDF変換」「タイムスタンプ書き出し」。`AudioConcatStep` は設定が必須のため、コンストラクタの引数を `(settings, cmd = commands)` の順にした（他のStepは `(cmd = commands)`）。モック注入しやすいよう、各Stepの `cmd` の型は使うコマンドだけの `Pick<Commands, ...>` とした。`run_ffmpeg_concat` の `slideIndices` には全スライドを表示順で渡す（音声のないスライドにもタイムスタンプを出すため）。`npm run check` でエラー0件。`buildSegments`（insert_silence／skip／advTm優先／0秒）と、音声なし・invoke例外時の失敗結果を手元で確認済み
 - [ ] T5-4 【エージェント】`orchestrator.ts` を実装する
   - 依存: T5-3
   - `onStart` / `onProgress` の2つのコールバックを持つ（v2）
