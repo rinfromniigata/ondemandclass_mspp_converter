@@ -3,7 +3,7 @@
 
 use std::io::Read;
 use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -38,6 +38,16 @@ impl ProcessOutput {
             })
         }
     }
+
+    /// stdout と stderr の末尾（空でないものを改行でつなぐ）。正常終了したのに成果物がない場合の文言に使う
+    pub fn output_tail(&self) -> String {
+        [&self.stdout, &self.stderr]
+            .into_iter()
+            .map(|text| tail_lines(text, STDERR_TAIL_LINES))
+            .filter(|tail| !tail.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 /// `cmd` を実行し、終了を待って出力を返す。非ゼロ終了はエラーにしない（`ensure_success` で判定する）。
@@ -68,7 +78,7 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOu
                 thread::sleep(POLL_INTERVAL.min(deadline - now));
             }
             Err(source) => {
-                let _ = child.kill();
+                kill_tree(&mut child);
                 let _ = child.wait();
                 return Err(AppError::Io {
                     context: format!("{program} の終了を待てませんでした"),
@@ -79,8 +89,7 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOu
     };
 
     let Some(status) = status else {
-        // kill は終了済みの場合にもエラーを返すだけなので結果は見ない
-        let _ = child.kill();
+        kill_tree(&mut child);
         let _ = child.wait();
         let drain_deadline = Instant::now() + PIPE_DRAIN_GRACE;
         let stderr = receive_until(&stderr_rx, drain_deadline);
@@ -110,6 +119,30 @@ fn hide_console_window(cmd: &mut Command) {
 
 #[cfg(not(windows))]
 fn hide_console_window(_cmd: &mut Command) {}
+
+/// 子プロセスを子孫ごと強制終了する。
+/// Windows では `soffice.exe` が実体の `soffice.bin` を子プロセスとして起動するため、
+/// 直接の子だけを kill すると `soffice.bin` が残り、プロファイルを握ったままになる。
+/// `taskkill /T /F` で子孫ごと終了させ、失敗した場合に備えて直接の子も kill する
+#[cfg(windows)]
+fn kill_tree(child: &mut Child) {
+    let mut taskkill = Command::new("taskkill");
+    taskkill
+        .args(["/PID", &child.id().to_string(), "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    hide_console_window(&mut taskkill);
+    let _ = taskkill.status();
+    // kill は終了済みの場合にもエラーを返すだけなので結果は見ない
+    let _ = child.kill();
+}
+
+/// Windows 以外は直接の子だけを終了する（子孫は残りうる）
+#[cfg(not(windows))]
+fn kill_tree(child: &mut Child) {
+    let _ = child.kill();
+}
 
 /// パイプを別スレッドで最後まで読み、読み終えたら文字列を送る
 fn spawn_reader<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
@@ -216,6 +249,28 @@ mod tests {
         );
         // 30秒待たずに戻ること（kill されている）
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    /// 孫プロセスも終了させる。孫がパイプを引き継いで残ると、パイプを読み切る待ち
+    /// （PIPE_DRAIN_GRACE = 5秒）まで戻らないため、戻るまでの時間で確かめる
+    #[cfg(windows)]
+    #[test]
+    fn kills_grandchildren_on_timeout() {
+        let started = Instant::now();
+        let err = run_with_timeout(
+            shell("ping -n 30 127.0.0.1 > nul"),
+            Duration::from_millis(500),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AppError::ProcessTimeout { .. }),
+            "unexpected error: {err:?}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(4),
+            "elapsed: {:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

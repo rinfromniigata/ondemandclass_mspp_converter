@@ -11,6 +11,7 @@ use super::probe::{probe, AudioInfo};
 use super::timeline::build_timeline;
 use super::{AudioSegment, ConcatResult, PROCESS_TIMEOUT};
 use crate::error::AppError;
+use crate::fs_util::move_or_copy;
 use crate::pptx::package::PptxPackage;
 use crate::process::run_with_timeout;
 
@@ -101,7 +102,10 @@ pub fn concat_audio(
     };
 
     let timestamps = build_timeline(slide_indices, &durations).map_err(AppError::Message)?;
-    move_file(&output, out_path)?;
+    move_or_copy(&output, out_path).map_err(|source| AppError::Io {
+        context: format!("結合した音声を保存できません（{}）", out_path.display()),
+        source,
+    })?;
     Ok(ConcatResult {
         timestamps,
         reencoded,
@@ -368,20 +372,6 @@ fn file_name_of(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// 一時フォルダの結果を `out_path` へ移す。ドライブが異なり rename できない場合はコピーする
-/// （コピー元は一時フォルダごと削除される）
-fn move_file(from: &Path, out_path: &Path) -> Result<(), AppError> {
-    if fs::rename(from, out_path).is_ok() {
-        return Ok(());
-    }
-    fs::copy(from, out_path)
-        .map(|_| ())
-        .map_err(|source| AppError::Io {
-            context: format!("結合した音声を保存できません（{}）", out_path.display()),
-            source,
-        })
-}
-
 fn media_error(slide_index: u32, media_path: &str) -> impl Fn(AppError) -> AppError + '_ {
     move |e| AppError::Message(format!("スライド{slide_index}の音声（{media_path}）：{e}"))
 }
@@ -488,18 +478,6 @@ mod tests {
             concat_list(&names),
             "file 'part_0.m4a'\nfile 'part_1.m4a'\n"
         );
-    }
-
-    #[test]
-    fn move_file_replaces_existing_output() {
-        let dir = TempDir::new().unwrap();
-        let from = dir.path().join("from.m4a");
-        let to = dir.path().join("to.m4a");
-        fs::write(&from, b"new").unwrap();
-        fs::write(&to, b"old").unwrap();
-        move_file(&from, &to).unwrap();
-        assert_eq!(fs::read(&to).unwrap(), b"new");
-        assert!(!from.exists());
     }
 
     #[test]

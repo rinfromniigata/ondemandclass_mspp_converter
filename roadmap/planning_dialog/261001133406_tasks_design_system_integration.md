@@ -311,9 +311,31 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 全ケースで、出力のコーデック・サンプルレート・チャンネル数と、出力の長さが最後の endSec と一致すること（許容差0.05秒）を確認
     - 結果: 3回連続で9件すべて成功（1回あたり約5秒）。通常の `cargo test` では9件が ignored になり、単体104件・結合9件（pptx_extract）が成功。`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
     - 未確認: copy 結合の ffmpeg が非ゼロ終了したときの再エンコードへの再試行。形式のそろったAACで copy 結合だけを失敗させる入力を作れなかったため、テストしていない（判定は `ProcessFailed` の照合だけで、再試行先の再エンコード方式は上のケースで確認済み）
-- [ ] T4-5 【エージェント】`pdf/mod.rs` とコマンド `run_soffice_convert` を実装し、登録する
+- [x] T4-5 【エージェント】`pdf/mod.rs` とコマンド `run_soffice_convert` を実装し、登録する
   - 依存: T2-1
   - アプリ専用プロファイル、一時フォルダ出力→移動、120秒タイムアウト
+  - 実施メモ:
+    - `pdf/mod.rs`：`convert_to_pdf(soffice, profile_dir, input, out_path) -> Result<PathBuf, AppError>` は imple 3.7 どおり
+      - プロファイルフォルダは起動前に `create_dir_all` する
+      - soffice は正常終了してもPDFを作らないことがあるため、`<一時フォルダ>/<入力のstem>.pdf` がなければ「PDFが生成されませんでした（{入力}）」とし、stdout/stderrの末尾を付ける
+      - 非ゼロ終了は `ProcessFailed`。入力がない場合は終了コード1と `Error: source file could not be loaded` になる
+      - 出力先への移動は `fs_util::move_or_copy`（T4-3 の移動処理を共通化したもの）
+    - `file_url(path)`（純粋関数）
+      - `\` を `/` にし、英数字と `-._~/:` 以外はUTF-8のバイト単位でパーセントエンコードする
+      - ドライブパスは `file:///C:/…`、UNCは `file://server/share/…`。`\\?\` 拡張パスとUNIXの絶対パスにも対応した
+    - コマンド `commands/pdf_convert.rs`：`run_soffice_convert(app, state, input_path, out_path) -> Result<String, String>`
+      - プロファイルは `app.path().app_local_data_dir()`（Tauri 2.12.1 で確認）の下の `lo_profile`。実際の場所は `%LOCALAPPDATA%\com.rinfromniigata.ondemandclass-mspp-converter\lo_profile`
+      - 処理は `spawn_blocking` で実行する
+    - `lib.rs` に `pub mod pdf` と `pub mod fs_util` を追加し、`commands::pdf_convert::run_soffice_convert` を登録
+    - **sofficeのプロセス構成（T2-1 で持ち越した確認）**: `soffice.exe` は実体の `soffice.bin` を子プロセスとして起動し、変換が終わるまで待つ。直接の子だけを kill すると `soffice.bin` が残るため、`process.rs` のタイムアウト時の終了を子孫ごと（Windowsは `taskkill /T /F`）に変えた。詳細は `roadmap/development/261002114351_fix_process_tree_kill.md`
+    - 環境で見つかった現象: 一時的なテストで、プロファイルを長いパス（約150文字のスクラッチ領域）に置くと、soffice が 0xC0000409 で異常終了した（初回・2回目とも）。`%LOCALAPPDATA%` 直下の短いパスでは正常に動く。アプリの実際のプロファイルパスは約90文字のため問題ないと判断した。異常終了しても `ProcessFailed` としてエラーを返す
+    - テスト: pdf 6件（file_url 4件・起動失敗とプロファイルフォルダの作成・ファイル名なし）、fs_util 2件、process に孫プロセスの終了1件。全体で `cargo test` 単体112件・結合9件成功、`concat_integration`（ignored）9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 実ファイル確認: 一時的な結合テストで、`samples/` のppsx（前編、84MB）を実際の soffice（LibreOffice 26.8.0.3）で変換した。確認後、一時テストとテスト用プロファイルは削除した
+      - 新規プロファイルで18.4秒、2回目は9.4秒で、PDFは84,785,720バイト。入力と同じフォルダに `<basename>.pdf` は作られない
+      - 存在しない入力は `ProcessFailed`（stderr: `Error: source file could not be loaded`）
+      - 3秒で打ち切ると3.3秒で `ProcessTimeout` になり、`soffice.bin` は残らない。その直後の変換も成功する
+    - 120秒のタイムアウトは84MBのppsxで2回目9.4秒・初回18.4秒のため余裕がある
+    - 未確認: フロントからの呼び出しは T5-1 以降。macOS では子孫を終了しない（Windows以外は直接の子だけ）
 - [ ] T4-6 【エージェント】コマンド `check_outputs_exist`・`write_timestamps_json` を実装し、登録する
   - 依存: T2-3
   - JSONの丸め（小数3桁）と書き出し形式に単体テストを書く

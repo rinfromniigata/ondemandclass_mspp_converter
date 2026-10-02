@@ -1,6 +1,8 @@
 pub mod audio;
 pub mod commands;
 pub mod error;
+pub mod fs_util;
+pub mod pdf;
 pub mod pptx;
 pub mod process;
 pub mod settings;
@@ -18,6 +20,7 @@ pub fn run() {
             commands::settings::load_and_validate_settings,
             commands::pptx_extract::extract_pptx,
             commands::audio_process::run_ffmpeg_concat,
+            commands::pdf_convert::run_soffice_convert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
