@@ -247,8 +247,17 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 確認: `cargo test` で単体69件・結合9件がすべて成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
 
 ## Phase 4: 音声結合・PDF変換・JSON書き出し
-- [ ] T4-1 【エージェント】`audio/probe.rs`（ffprobe実行と `parse_probe_json`）を実装する
+- [x] T4-1 【エージェント】`audio/probe.rs`（ffprobe実行と `parse_probe_json`）を実装する
   - 依存: T2-1
+  - 実施メモ:
+    - `audio/mod.rs` は今のところ `pub mod probe;` と、ffmpeg/ffprobe共通のタイムアウト定数 `PROCESS_TIMEOUT`（300秒）のみ。`AudioSegment` 等の型は使う項目（T4-2・T4-3）で追加する。`lib.rs` に `pub mod audio` を追加
+    - `probe(ffprobe, file)`：imple 3.6 のコマンドラインを `run_with_timeout` → `ensure_success` で実行し、stdoutを `parse_probe_json` に渡す。解析に失敗した場合は「音声情報を取得できません（{ファイル}）：{理由}」の `AppError::Message`。ffprobeの非ゼロ終了は `ProcessFailed`（stderr末尾にファイル名と原因が入る）
+    - `parse_probe_json` の戻り値は `Result<AudioInfo, String>`（imple は戻り値の型を明記していない。ファイル名は `probe` 側で付けるため理由の文言だけを返す）
+      - ffprobeの実出力では `sample_rate` と `format.duration` が文字列（`"44100"`・`"34.830249"`）、`channels` が数値のため、数値項目は文字列・数値のどちらも受け付ける
+      - `streams` の最初の要素だけを使う。`streams` が空・ない場合（解析できない入力に対して ffprobe は `{}` を出力する）は「音声ストリームがありません」
+      - サンプルレート・チャンネル数は1以上の整数、再生時間は0以上の有限値（`"N/A"` は不可）。満たさない場合は項目ごとの「〜を取得できません」
+    - テスト: probe 7件（実出力の解析・数値形式・先頭ストリームのみ・ストリームなし・項目の欠落/不正9パターン・JSON不正・ffprobe起動失敗）。全体で `cargo test` 単体76件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 実ファイル確認: 一時的な結合テストで、`samples/` のppsxから取り出した `media1.m4a` を実際の ffprobe 9.0.2（WinGet Linksのパス）に通し、`aac / 44100 / 2ch / 34.830249秒` を取得した。音声でないファイルでは `ProcessFailed`（stderr: `Invalid data found when processing input`）になることを確認。一時テストは確認後に削除した
 - [ ] T4-2 【エージェント】`audio/plan.rs`（結合方式判定）と `audio/timeline.rs`（タイムスタンプ計算）を実装し、単体テストを書く
   - 依存: T4-1
   - timeline は skip 時の長さ0区間、複数区間のスライド、先頭が無音のケースを含める
