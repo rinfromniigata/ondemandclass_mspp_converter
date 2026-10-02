@@ -220,9 +220,31 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - どちらも33枚・音声あり33枚・警告なし。JSONのキーはスペックの `SlideAudioEntry` どおり
       - 所要時間はdebugビルドで0.15〜0.33秒
     - 未確認: フロントからの `invoke("extract_pptx")` の確認は、T5-1（`tauriCommands.ts`）実装後に行う
-- [ ] T3-5 【エージェント】テスト用 `PptxBuilder` を作成し、imple 6.1 の主なケースの結合テストを書く
+- [x] T3-5 【エージェント】テスト用 `PptxBuilder` を作成し、imple 6.1 の主なケースの結合テストを書く
   - 依存: T3-4
   - 受け入れ基準「sldIdLst順」「p:timing順」をこのテストで満たす
+  - 実施メモ:
+    - `tests/common/mod.rs`（`pub mod fixture;`、結合テストのファイルごとに使わない部品があるため `#![allow(dead_code)]`）と `tests/common/fixture.rs` を作成
+    - `fixture.rs`:
+      - `PptxBuilder`：`slide(ファイル番号, SlideBuilder)` を呼んだ順が sldIdLst順（表示順）になる。`presentation.xml.rels` はファイル番号の昇順で書く。ほかに `media(名前, バイト列)`、`kind(PackageKind::Pptx | Ppsx)`（`[Content_Types].xml` のメインパートと拡張子だけを切り替える）、`to_bytes()`、`write_to(dir, stem)`
+      - `SlideBuilder`：`text`・`audio`・`video`（図形）、`timing_audio(spid列)`、`advance_ms`・`advance_ms_alternate`（advTm）、`audio_rel`・`video_rel`・`external_audio_rel`（rels）。relsを1件も追加しなければ rels ファイル自体を作らない
+      - 実ファイル（samples/）で見つかった形を再現する
+        - `presentation.xml` のセクション情報（`p14:sldIdLst`）
+        - 音声図形の `p14:media r:embed`
+        - メインシーケンスの `playFrom` 呼び出し（`p:audio` と逆順に入れ、順序判定に影響しないことを確かめる）
+      - zipはメモリ上（`Cursor<Vec<u8>>`）で組み立て、`write_to` でテスト用の一時フォルダへ書き出す（`extract_from_file` がパスを受け取るため）
+      - T4-4 の ffmpeg 結合テストでも、`media` で音声の実体を埋め込んで使う想定
+    - `tests/pptx_extract.rs`（9件）:
+      - sldIdLst順（slide3→1→2）がファイル番号・relsの記載順と異なる
+      - 音声2つで、relsの記載順・図形ツリー順と p:timing の順が逆
+      - timingにない音声を図形ツリー順で末尾に追加
+      - 外部リンク・実体なしの音声（同じスライドの正常な音声は残る）と警告
+      - advTm あり・`mc:AlternateContent`（Choice側の値）・なし
+      - 動画図形の警告
+      - 音声も rels もないスライド
+      - pptx と ppsx で結果が一致
+      - コマンド `extract_pptx` を `tauri::async_runtime::block_on` で呼び、正常時の結果と、非zip・ファイルなしのエラー文言を確認
+    - 確認: `cargo test` で単体69件・結合9件がすべて成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
 
 ## Phase 4: 音声結合・PDF変換・JSON書き出し
 - [ ] T4-1 【エージェント】`audio/probe.rs`（ffprobe実行と `parse_probe_json`）を実装する
