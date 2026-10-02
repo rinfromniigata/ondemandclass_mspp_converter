@@ -162,8 +162,19 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - `parse_rels` の戻り値は imple の `HashMap<String, Relationship>` ではなく `Result<HashMap<…>, AppError>` にした（壊れたXMLをエラーとして返すため）。文言は「関係ファイル（.rels）を解析できません（…）」
       - 要素・属性名は `local_name()` で判定（プレフィックス付きも可）。属性値はquick-xml 0.42の `normalized_value(XmlVersion::Implicit1_0)` でエスケープを解除（`unescape_value` は0.42で非推奨）。`TargetMode` は大文字小文字を無視して `External` と比較。`Id` か `Target` がない要素は無視する
     - テスト: package 10件（resolve_target 6件・rels_path_of 1件・zipの読み取り/非zip/ファイルなし 3件。zipは `ZipWriter` で一時フォルダに作成）、rels 7件。全体で `cargo test --lib` 39件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
-- [ ] T3-2 【エージェント】`pptx/presentation.rs`（sldIdLst による順序解決）を実装する
+- [x] T3-2 【エージェント】`pptx/presentation.rs`（sldIdLst による順序解決）を実装する
   - 依存: T3-1
+  - 実施メモ:
+    - `slide_order(&mut PptxPackage)`（`read_string` が `&mut self` のため可変参照）は、次の2つの純粋関数を呼ぶだけにした
+      - `parse_slide_rids(xml)`：`r:id` を出現順に集める
+      - `resolve_slide_parts(rids, rels, exists)`：rels でパート名に変換する。`exists` はクロージャで受け取る
+    - `r:id` の判定: `sldId` にはプレフィックスなしの数値の `id` 属性もあるため、「プレフィックス付きでローカル名が `id`」の属性を `r:id` とみなす（プレフィックス名には依存しない）
+    - **実ファイルで判明した点**: PowerPointのセクション情報（`p:extLst/p:ext/p14:sectionLst/p14:section/p14:sldIdLst/p14:sldId`）にも、ローカル名が同じで `r:id` を持たない要素がある。ローカル名だけで判定すると、`samples/` のppsxで「スライド34に r:id がありません」になった。要素の深さを数え、**ルート直下の `sldIdLst` とその直下の `sldId` だけ**を読むように直し、回帰テストを追加した。T3-3（`p:timing` 等の走査）でも、同名の要素が別の場所に出てくる可能性に注意する
+    - エラーはすべて「スライドの順序を解決できません：…」で始まる。対象は、`sldIdLst` がない・空、`r:id` なし、XMLの破損、relsに `r:id` がない、外部参照（`TargetMode="External"`）、参照先のパートがzip内にない
+    - `presentation.xml` または `presentation.xml.rels` がない場合は、`read_string` の「{part} がファイル内にありません」をそのまま返す
+    - テスト補助: package.rs のテスト用zip作成関数を `#[cfg(test)] pub(crate) fn write_test_zip` に移し、他モジュールのテストからも使えるようにした
+    - テスト: presentation 12件（parse 6件・resolve 4件・slide_order 2件。sldIdLst順がrelsの記載順・ファイル名の数字順と異なるケースを含む）。全体で `cargo test --lib` 51件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 実ファイル確認: 一時的な結合テストで `samples/` のppsx 2点を `slide_order` に通し、どちらも33枚を解決した（どちらも sldIdLst順＝slide1〜33の順）。一時テストと `tests/` フォルダは確認後に削除した
 - [ ] T3-3 【エージェント】`pptx/slide.rs`（図形・p:timing・advTm・動画検出）を実装する
   - 依存: T3-1
   - `parse_slide` は XML文字列を入力にする純粋関数とし、単体テストを書く

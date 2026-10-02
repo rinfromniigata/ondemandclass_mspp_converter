@@ -115,13 +115,24 @@ pub fn rels_path_of(part: &str) -> String {
     }
 }
 
+/// テスト用：`entries`（パート名と中身）を持つzipを `path` に作る
 #[cfg(test)]
-mod tests {
+pub(crate) fn write_test_zip(path: &Path, entries: &[(&str, &[u8])]) {
     use std::io::Write;
 
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
 
+    let mut zip = ZipWriter::new(File::create(path).unwrap());
+    for (name, data) in entries {
+        zip.start_file(*name, SimpleFileOptions::default()).unwrap();
+        zip.write_all(data).unwrap();
+    }
+    zip.finish().unwrap();
+}
+
+#[cfg(test)]
+mod tests {
     use super::*;
 
     #[test]
@@ -189,20 +200,11 @@ mod tests {
         assert_eq!(rels_path_of("root.xml"), "_rels/root.xml.rels");
     }
 
-    fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
-        let mut zip = ZipWriter::new(File::create(path).unwrap());
-        for (name, data) in entries {
-            zip.start_file(*name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(data).unwrap();
-        }
-        zip.finish().unwrap();
-    }
-
     #[test]
     fn package_reads_entries() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.pptx");
-        write_zip(
+        write_test_zip(
             &path,
             &[
                 (
