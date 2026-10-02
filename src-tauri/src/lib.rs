@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod error;
+pub mod pptx;
 pub mod process;
 pub mod settings;
 pub mod state;

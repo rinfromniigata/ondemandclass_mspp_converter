@@ -148,9 +148,20 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 未確認: アプリを起動してフロントから呼ぶ確認は、呼び出し側（T5-1 `tauriCommands.ts`・T5-2 `settings.ts`）の実装後に行う
 
 ## Phase 3: pptx解析
-- [ ] T3-1 【エージェント】`pptx/package.rs`・`pptx/rels.rs` を実装する
+- [x] T3-1 【エージェント】`pptx/package.rs`・`pptx/rels.rs` を実装する
   - 依存: T2-1
   - パス正規化（`../media/x.m4a`）と `TargetMode="External"` の判定に単体テストを書く
+  - 実施メモ:
+    - `pptx/mod.rs` は今のところ `pub mod package; pub mod rels;` の宣言のみ（`extract_slide_audio_map` と型定義は T3-4）。`lib.rs` に `pub mod pptx` を追加
+    - `package.rs`:
+      - `PptxPackage::open` / `exists` / `read_bytes` / `read_string`。zip 8.6 の `ZipArchive::by_name` が `&mut self` を要求するため、`read_bytes` / `read_string` は `&mut self`（`exists` は `index_for_name` を使うため `&self`）
+      - `read_string` はUTF-8として読み、先頭のBOMを取り除く。パートがない場合は「{part} がファイル内にありません（{ファイルパス}）」、zipとして読めない場合は「pptx/ppsxとして読み込めません（…）」
+      - `resolve_target(base_part, target)`・`rels_path_of(part)` は純粋関数（自由関数）として置いた。`/` 始まりの Target はパッケージルートからの絶対パスとして扱う。`\` も区切りとして受け付ける。ルートより上へ出る `..` は `..` のまま残し、zip内に存在しないパート名にする（T3-3でリンク切れ扱いになる）
+      - Targetのパーセントエンコード（`%20` 等）はデコードしていない。PowerPointが付けるメディア名は `media{n}.{拡張子}` のため。実ファイルで問題が出たらfixで対応する
+    - `rels.rs`:
+      - `parse_rels` の戻り値は imple の `HashMap<String, Relationship>` ではなく `Result<HashMap<…>, AppError>` にした（壊れたXMLをエラーとして返すため）。文言は「関係ファイル（.rels）を解析できません（…）」
+      - 要素・属性名は `local_name()` で判定（プレフィックス付きも可）。属性値はquick-xml 0.42の `normalized_value(XmlVersion::Implicit1_0)` でエスケープを解除（`unescape_value` は0.42で非推奨）。`TargetMode` は大文字小文字を無視して `External` と比較。`Id` か `Target` がない要素は無視する
+    - テスト: package 10件（resolve_target 6件・rels_path_of 1件・zipの読み取り/非zip/ファイルなし 3件。zipは `ZipWriter` で一時フォルダに作成）、rels 7件。全体で `cargo test --lib` 39件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
 - [ ] T3-2 【エージェント】`pptx/presentation.rs`（sldIdLst による順序解決）を実装する
   - 依存: T3-1
 - [ ] T3-3 【エージェント】`pptx/slide.rs`（図形・p:timing・advTm・動画検出）を実装する
