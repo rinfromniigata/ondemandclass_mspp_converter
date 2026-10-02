@@ -1,0 +1,156 @@
+/*
+ * 全体の土台となるスタイル（imple 5.1・5.2）
+ * 値はすべて tokens.css のトークンを参照する。tokens.css より後に読み込むこと
+ */
+
+/* ===== リセット ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+:root {
+  /* スクロールバー等のOS部品の配色をライト・ダークに追従させる */
+  color-scheme: light dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ===== フォーカスリング ===== */
+:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+/* ===== 状態レイヤー（::before に currentColor を重ねる。背景色は書き換えない） ===== */
+.state-layer {
+  position: relative;
+  isolation: isolate;
+}
+
+.state-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.state-layer:hover::before {
+  opacity: var(--state-layer-opacity-hover);
+}
+
+.state-layer:focus-visible::before {
+  opacity: var(--state-layer-opacity-focus);
+}
+
+.state-layer:active::before {
+  opacity: var(--state-layer-opacity-pressed);
+}
+
+/* ドラッグオーバー中（DropZone の Card に適用） */
+.state-layer.dragged::before {
+  opacity: var(--state-layer-opacity-dragged);
+}
+
+/* 無効状態では状態レイヤーを出さない */
+.state-layer:disabled::before,
+.state-layer[aria-disabled="true"]::before {
+  opacity: 0;
+}
+
+/* ===== elevation（スペック3章：4段階に簡略化） ===== */
+.elevation-0 {
+  box-shadow: none;
+}
+
+.elevation-1 {
+  box-shadow: var(--shadow-sm);
+}
+
+.elevation-2 {
+  box-shadow: var(--shadow-md);
+}
+
+.elevation-3 {
+  box-shadow: var(--shadow-lg);
+}
+
+/* ===== shape（スペック3章：4段階に簡略化） ===== */
+.shape-sm {
+  border-radius: var(--radius-sm);
+}
+
+.shape-md {
+  border-radius: var(--radius-md);
+}
+
+.shape-lg {
+  border-radius: var(--radius-lg);
+}
+
+.shape-full {
+  border-radius: var(--radius-full);
+}
+
+/* ===== 読み上げ専用テキスト ===== */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== reduced-motion：モーション系トークンの duration を 0 に上書きする ===== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-base: 0ms;
+    --motion-duration-slow: 0ms;
+  }
+}

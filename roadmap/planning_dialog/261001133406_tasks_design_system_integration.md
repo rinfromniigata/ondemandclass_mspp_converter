@@ -378,9 +378,11 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
 - [ ] T5-7 【エージェント】`+layout.ts`・`+page.svelte` と画面コンポーネント（DropZone・Wizard・ProcessingView・ResultView・ConfirmDialog）を実装する
   - 依存: T5-5, T5-8, T5-9
   - 画面の構成は imple 5.4。色・影・角丸の値を直接書かない
-- [ ] T5-8 【エージェント】`base.css`（リセット・フォーカスリング・状態レイヤー・elevation/shapeユーティリティ・reduced-motion）と `+layout.svelte` を作る
+- [x] T5-8 【エージェント】`base.css`（リセット・フォーカスリング・状態レイヤー・elevation/shapeユーティリティ・reduced-motion）と `+layout.svelte` を作る
   - 依存: T1-9
   - imple 5.1・5.2
+  - 実施メモ: T5-7の依存として、ユーザーの指示によりT5-7より先にこの項目だけを実施した（T5-9・T5-7は次の指示待ち）
+  - 実施メモ: imple 5.1・5.2 に加えて次を追加した。`data-theme` 指定時の `color-scheme` の固定、`html, body { height: 100% }`、`button`/`input` のフォント継承、ドラッグオーバー用の `.state-layer.dragged`（opacity は `--state-layer-opacity-dragged`）、無効状態（`:disabled` / `aria-disabled="true"`）では状態レイヤーを出さない指定、読み上げ専用の `.visually-hidden`。トークンを使わない数値は、スペック3章で固定されたフォーカスリングの `2px` と、`.visually-hidden` の定型値（`1px` 等）だけ。`bun run check` でエラー0件、`bun run build` 成功。ビルド後のCSSで tokens.css → base.css の順に並ぶこと、reduced-motion の上書き（圧縮後は `0s`）が残ることを確認済み
 - [ ] T5-9 【エージェント】基本部品7種とアイコン用小コンポーネントを `src/lib/components/ui/` に実装する
   - 依存: T5-8
   - Props は imple 5.3。全部品で enabled/hover/focus/pressed/disabled を確認できるようにする
