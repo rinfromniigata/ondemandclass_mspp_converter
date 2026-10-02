@@ -353,9 +353,10 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 未確認: フロントからの呼び出しは T5-1 以降
 
 ## Phase 5: フロントエンド
-- [ ] T5-1 【エージェント】`steps/types.ts`・`tauriCommands.ts` を実装する
+- [x] T5-1 【エージェント】`steps/types.ts`・`tauriCommands.ts` を実装する
   - 依存: T1-4
   - `PipelineState.processing` に `running` を含める（v2）
+  - 実施メモ: `AppSettings`・`SettingsStatus`・`ConcatResult` に加え、`SilentSlideHandling`（`"insert_silence" | "skip"`）と `runFfmpegConcat` の引数型 `FfmpegConcatArgs` も `tauriCommands.ts` で定義した。各コマンドの引数名はRust側の `#[tauri::command]` と照合済み。`npm run check` でエラー0件
 - [ ] T5-2 【エージェント】`outputPaths.ts`・`settings.ts`・`pipelineStore.ts` を実装する
   - 依存: T5-1
 - [ ] T5-3 【エージェント】4つのStep（`buildSegments` を含む）を実装する
