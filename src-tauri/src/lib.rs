@@ -15,6 +15,7 @@ pub fn run() {
         // 各Phaseで実装したコマンドをここへ追加する
         .invoke_handler(tauri::generate_handler![
             commands::settings::load_and_validate_settings,
+            commands::pptx_extract::extract_pptx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

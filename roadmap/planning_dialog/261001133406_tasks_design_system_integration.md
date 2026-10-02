@@ -198,8 +198,28 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 音声図形が1つで、timingのspidと一致し、`ppt/media/media{n}.m4a` に解決できる（リンク切れ0）
       - 動画なし
       - advTm を取得できる（7.492〜287.22秒）
-- [ ] T3-4 【エージェント】`pptx/mod.rs`（`extract_slide_audio_map`）とコマンド `extract_pptx` を実装し、登録する
+- [x] T3-4 【エージェント】`pptx/mod.rs`（`extract_slide_audio_map`）とコマンド `extract_pptx` を実装し、登録する
   - 依存: T3-2, T3-3
+  - 実施メモ:
+    - `pptx/mod.rs`:
+      - `SlideAudioEntry`・`SlideAudioMap`（`Serialize`、camelCase。`advanceSec` は未設定なら `null`）
+      - `extract_slide_audio_map(&mut PptxPackage)`：`slide_order` → 各スライドを `parse_slide` → `resolve_audio`。警告はスライドごとに「リンク切れ」「動画」の順で、文言はスペックどおり
+      - `extract_from_file(path)`：zipを開いて上を呼ぶ入口。コマンド層から使う
+    - スライドの rels がない場合は空の表として扱う（メディアのないスライドで起こりうるため）。スライドXMLや rels が壊れている場合は、「スライド{n}（{パート名}）：…」を付けたエラーにする。スペック上のエラー条件（zip・presentation.xml・順序）に加えた扱い
+    - `commands/pptx_extract.rs`: `extract_pptx(input_path: String) -> Result<SlideAudioMap, String>`
+      - 設定は使わないため `State` は受け取らない
+      - 処理は `tauri::async_runtime::spawn_blocking` で実行する（Tauri 2.12.1で確認）
+      - `JoinError` は「pptx解析を実行できませんでした（…）」、`AppError` は `to_string()` で返す
+    - `lib.rs` の `generate_handler!` に `commands::pptx_extract::extract_pptx` を登録
+    - テスト: mod 3件
+      - 3枚構成：音声2つをtiming順に並べる・音声もrelsもないスライド・外部リンク＋動画で警告2件
+      - JSONのキー名とnull
+      - スライドXMLの破損時にスライド番号を含むエラーになる
+    - 確認: `cargo test --lib` 69件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし、`cargo build` 成功
+    - 実ファイル確認: 一時的な結合テストで、`samples/` のppsx 2点を `extract_from_file` に通した（一時テストは確認後に削除）
+      - どちらも33枚・音声あり33枚・警告なし。JSONのキーはスペックの `SlideAudioEntry` どおり
+      - 所要時間はdebugビルドで0.15〜0.33秒
+    - 未確認: フロントからの `invoke("extract_pptx")` の確認は、T5-1（`tauriCommands.ts`）実装後に行う
 - [ ] T3-5 【エージェント】テスト用 `PptxBuilder` を作成し、imple 6.1 の主なケースの結合テストを書く
   - 依存: T3-4
   - 受け入れ基準「sldIdLst順」「p:timing順」をこのテストで満たす
