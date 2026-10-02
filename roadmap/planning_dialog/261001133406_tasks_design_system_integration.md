@@ -258,9 +258,22 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - サンプルレート・チャンネル数は1以上の整数、再生時間は0以上の有限値（`"N/A"` は不可）。満たさない場合は項目ごとの「〜を取得できません」
     - テスト: probe 7件（実出力の解析・数値形式・先頭ストリームのみ・ストリームなし・項目の欠落/不正9パターン・JSON不正・ffprobe起動失敗）。全体で `cargo test` 単体76件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
     - 実ファイル確認: 一時的な結合テストで、`samples/` のppsxから取り出した `media1.m4a` を実際の ffprobe 9.0.2（WinGet Linksのパス）に通し、`aac / 44100 / 2ch / 34.830249秒` を取得した。音声でないファイルでは `ProcessFailed`（stderr: `Invalid data found when processing input`）になることを確認。一時テストは確認後に削除した
-- [ ] T4-2 【エージェント】`audio/plan.rs`（結合方式判定）と `audio/timeline.rs`（タイムスタンプ計算）を実装し、単体テストを書く
+- [x] T4-2 【エージェント】`audio/plan.rs`（結合方式判定）と `audio/timeline.rs`（タイムスタンプ計算）を実装し、単体テストを書く
   - 依存: T4-1
   - timeline は skip 時の長さ0区間、複数区間のスライド、先頭が無音のケースを含める
+  - 実施メモ:
+    - `audio/mod.rs` に `SlideTimestampEntry`（camelCase）を追加。T4-6 の `write_timestamps_json` でフロントから受け取るため `Serialize` と `Deserialize` の両方を付けた。`AudioSegment`・`ConcatResult` は T4-3 で追加する
+    - `plan.rs`：`ConcatMode`・`decide_mode` は imple 3.6 どおり
+      - copy の条件は「全件の `codec` が `"aac"`（ffprobe の `codec_name`）で、サンプルレート・チャンネル数が全件一致」。全件MP3で形式がそろっていても再エンコードにする
+      - `Reencode` のチャンネル数は最大チャンネル数を 1〜2 に収めた値
+      - `infos` が空の場合（音声区間なし）は `Reencode { channels: 1 }`。フロント側（AudioConcatStep）が音声のないスライド列では呼ばないため通常は起こらないが、パニックせず値を返すようにした
+      - copy で3ch以上がそろった場合はそのまま `Copy { channels: 3以上 }` になる。T4-3 の無音生成（imple では `cl=mono|stereo`）で、このときのチャンネルレイアウトの指定に注意する
+    - `timeline.rs`：`build_timeline` の戻り値を imple の `Vec<SlideTimestampEntry>` ではなく `Result<Vec<…>, String>` にした
+      - 区間列はIPCでフロントから受け取るため、`slide_indices` の順に並んでいない区間（どのスライドにも割り当てられない区間）が残る場合に、黙って誤ったtimestampを返さずエラーにする。文言は「スライド{n}の音声区間が、スライドの表示順に並んでいません」
+      - 秒が負・NaN・無限の場合は「スライド{n}の音声区間の長さが不正です（{秒}秒）」
+      - 処理は、表示順のスライドごとに、先頭から同じ slide_index の区間を消費して累積する。区間を持たないスライドはその時点の累積値で start = end
+      - 丸め（小数3桁）は行わない（T4-6 の JSON 書き出しで行う）
+    - テスト: plan 6件（copy・サンプルレート不一致・チャンネル不一致・AAC以外・上限2ch・空入力）、timeline 10件（1区間ずつ・複数区間のスライド・skip時の長さ0・先頭が無音区間・先頭がskip・末尾がskip・空入力・順序不正・未知のスライド・不正な秒）。全体で `cargo test` 単体92件・結合9件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
 - [ ] T4-3 【エージェント】`audio/concat.rs` とコマンド `run_ffmpeg_concat` を実装し、登録する
   - 依存: T3-1, T4-2
 - [ ] T4-4 【エージェント】ffmpegを使う結合テスト（`#[ignore]`）を書き、実行する
