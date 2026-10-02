@@ -96,7 +96,11 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - OSの一時フォルダの `.tmp*` は前後とも0件（W4-2の補足）
 
 ## Phase 5: フロントエンド・デザインシステムの検証
-- [ ] W5-1 【エージェント】`bun run check` と `bun run test` がエラーなく完了することを確認する
+- [x] W5-1 【エージェント】`bun run check` と `bun run test` がエラーなく完了することを確認する
+  - 実施メモ（261002）:
+    - `bun run check`（svelte-kit sync → svelte-check）: 終了コード0。371ファイル、エラー0・警告0
+    - `bun run test`（vitest 5.0.3）: 終了コード0。5ファイル55件すべて成功（約2.2秒）、警告・stderr出力なし
+      - outputPaths 15件・confirmDialog 6件・orchestrator 6件・pipelineController 17件・audioConcatStep 11件（buildSegments 7件を含む）
 - [ ] W5-2 【ユーザー】アプリ起動直後にドロップゾーンのみが表示されることを確認する
 - [ ] W5-3 【ユーザー】.pptx/.ppsx 以外のファイル、および2つ以上のファイルをドロップしたとき、idle画面のままBannerで理由が表示されることを確認する
 - [ ] W5-4 【ユーザー】マウスを使わずに Tab / Shift+Tab / Enter / Space / Esc だけで、idle・結果・確認ダイアログの各画面のすべての操作ができ、フォーカス中の要素に枠線（フォーカスリング）がはっきり見えることを確認する
