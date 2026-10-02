@@ -175,9 +175,29 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - テスト補助: package.rs のテスト用zip作成関数を `#[cfg(test)] pub(crate) fn write_test_zip` に移し、他モジュールのテストからも使えるようにした
     - テスト: presentation 12件（parse 6件・resolve 4件・slide_order 2件。sldIdLst順がrelsの記載順・ファイル名の数字順と異なるケースを含む）。全体で `cargo test --lib` 51件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
     - 実ファイル確認: 一時的な結合テストで `samples/` のppsx 2点を `slide_order` に通し、どちらも33枚を解決した（どちらも sldIdLst順＝slide1〜33の順）。一時テストと `tests/` フォルダは確認後に削除した
-- [ ] T3-3 【エージェント】`pptx/slide.rs`（図形・p:timing・advTm・動画検出）を実装する
+- [x] T3-3 【エージェント】`pptx/slide.rs`（図形・p:timing・advTm・動画検出）を実装する
   - 依存: T3-1
   - `parse_slide` は XML文字列を入力にする純粋関数とし、単体テストを書く
+  - 実施メモ:
+    - 型: `MediaKind { Audio, Video }`・`MediaShape { shape_id, kind, link_rid }`・`SlideParts { media_shapes, timing_audio_order, advance_sec }`・`SlideAudio { media_paths, link_broken }`
+    - imple との差分:
+      - `parse_slide` の戻り値を `Result<SlideParts, AppError>` にした（壊れたXMLをエラーにするため。文言は「スライドのXMLを解析できません（…）」で、何枚目のスライドかは T3-4 で付ける）
+      - `MediaShape.link_rid` は `Option<String>`（`r:link` がない場合はリンク切れとして扱う）
+    - imple 3.5 の slide.rs の節にある「音声の並び順の決定」と「rels解決・リンク切れ判定」も、純粋関数としてslide.rsに置いた（T3-4の `mod.rs` は呼び出して組み立てるだけになる）
+      - `SlideParts::ordered_audio_shapes()`：timingのspid順（重複除去、音声でない図形のspidは無視）に並べ、timingに現れない音声を図形ツリー順で末尾に追加する
+      - `resolve_audio(slide_part, parts, rels, exists)`：次の4つをリンク切れとし、`media_paths` に含めない。relsにない／External／zip内にない／`r:link` なし
+      - `SlideParts::has_video()`：動画警告の判定に使う
+    - 取り違え対策（T3-2の教訓）として、ローカル名に加えて親要素で絞った
+      - `cNvPr` は `nv*Pr`（`nvPicPr`・`nvGrpSpPr` 等）の直下、`audioFile`/`videoFile` は `nvPr` の直下だけを読む
+      - `spTgt` は、祖先に `timing` と `audio` がある場合だけ読む（メインシーケンスの `p:cmd playFrom` の `spTgt` は対象外。実ファイルにもある）
+      - `mc:AlternateContent` は最初の分岐（通常は `mc:Choice`）だけを読み、残りは `read_to_end` で読み飛ばす。画面切り替えの「最初に見つかった advTm」と、Choice/Fallback の両方に同じ図形がある場合の二重計上の防止を、同じ仕組みで満たす
+      - advTm は、最初の `transition` 要素の値を使う。値が数値でない・負の場合は `None`
+    - 対象外: 旧形式の `a:wavAudioFile`（`r:embed`）と `a:quickTimeFile` は検出しない（スペックの対象は `a:audioFile`/`a:videoFile`）
+    - テスト: slide 15件。parse 12件（実ファイルと同じ形・timing順・timingにない音声の追加・playFrom除外・動画・グループ内の音声・`r:link` なし・AlternateContent・advTmの各形式・別プレフィックス・メディアなし・XML破損）、resolve 3件。全体で `cargo test --lib` 66件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
+    - 実ファイル確認: 一時的な結合テストで、`samples/` のppsx 2点の全66枚を `slide_order` → `parse_slide` → `resolve_audio` に通した。全スライドで次のとおりだった。一時テストは確認後に削除した
+      - 音声図形が1つで、timingのspidと一致し、`ppt/media/media{n}.m4a` に解決できる（リンク切れ0）
+      - 動画なし
+      - advTm を取得できる（7.492〜287.22秒）
 - [ ] T3-4 【エージェント】`pptx/mod.rs`（`extract_slide_audio_map`）とコマンド `extract_pptx` を実装し、登録する
   - 依存: T3-2, T3-3
 - [ ] T3-5 【エージェント】テスト用 `PptxBuilder` を作成し、imple 6.1 の主なケースの結合テストを書く
