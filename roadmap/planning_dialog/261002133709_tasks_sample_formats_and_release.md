@@ -1,13 +1,16 @@
-# 実装タスク（tasks）: 初期実装＋デザインシステム
+# 実装タスク（tasks）: 初期実装＋デザインシステム＋リリース
 
 - 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
-- 実装設計: `roadmap/planning_dialog/261001133221_imple_design_system_integration.md`
-- 検証手順: `roadmap/planning_dialog/261001133444_walk_design_system_integration.md`
-- 前版: `roadmap/archived/260930203323_tasks_initial_implementation.md`（完了済み項目なし）
-- 変更理由: `roadmap/development/261001132402_change_design_system.md`
+- 実装設計: `roadmap/planning_dialog/261002133708_imple_sample_formats_and_release.md`
+- 検証手順: `roadmap/planning_dialog/261002133710_walk_sample_formats_and_release.md`
+- 前版: `roadmap/archived/261001133406_tasks_design_system_integration.md`（IDとチェック状態を引き継ぎ）
+- 変更理由: `roadmap/development/261002133633_change_sample_formats_and_release.md`（前回: `261001132402_change_design_system.md`）
 
 各Phaseの完了後、対応するwalkのPhaseで検証してから次のPhaseへ進む。
+（グローバルルール改訂 261002121815 の「Phaseの同期・アジャイル化」は、ユーザーの指示により本プロジェクトでは適用しない。既存のIDとスケジュールを維持する）
 v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
+今回の変更で内容を変えた項目は T1-8・T6-2・T6-3、追加した項目は T7-1〜T7-4。
+実ファイル（pptx/ppsx）を前提にする確認は、必ず両方の形式で行う（imple 6.4）。
 
 ---
 
@@ -81,10 +84,11 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 3パスとも実在することを確認。ffmpeg・ffprobeは `-version` で起動できた（9.0.2）
     - `soffice --version` は、GUIのランチャーが `soffice.bin` を起動して戻らなかったため、起動確認は未実施（30秒で打ち切り、残った `soffice` / `soffice.bin` は停止済み）。実際の起動確認は T4-5・T6-3 のPDF変換（`--headless --convert-to`）で行う
     - `app.settings.json` はignore済みであることを確認
-- [x] T1-8 【ユーザー】手動検証用に、実際に配布されたpptx（あればppsxも）を `samples/` に置く
+- [x] T1-8 【ユーザー】手動検証用に、実際に配布されたpptxとppsxの両方を `samples/` に置く
   - 手動検証（walk Phase 6）までに用意できればよい。Phase 2以降の着手を妨げない
-  - 実施メモ: ユーザー報告により完了。`samples/` に ppsx が2点（`20260930_創作に係る倫理と知的財産１ （前編）.ppsx` 約82MB、`（後編）.ppsx` 約75MB）。**pptx は未配置**（ppsxのみ）
-  - 注意: T6-2 の派生サンプル（ppsx版）はこのppsxから作れるが、pptx版が必要な検証（walk Phase 6でpptx入力を確認する項目）では、ppsxの拡張子と `[Content_Types].xml` を書き換えて作るか、pptxを追加で置くか判断が要る
+  - 実施メモ: ユーザー報告により完了。当初（260930）は ppsx が2点（`20260930_創作に係る倫理と知的財産１ （前編）.ppsx` 約82MB、`（後編）.ppsx` 約75MB）だけだった
+  - 実施メモ（261002、変更 `261002133633_change_sample_formats_and_release.md`）: ユーザーが `（前編）.pptx`（85,826,238バイト）を追加した。`[Content_Types].xml` のメインパートは `presentation.main+xml` で、正しい pptx 形式（ppsx は `slideshow.main+xml`）。zip内は前編の ppsx と同じ267エントリ。後編は ppsx のみ
+  - 実施メモ: T3-2〜T3-4・T4-3・T4-5 の実ファイル確認は ppsx だけで行っていたため、pptx での再検証を各項目の実施メモに追記した
 - [x] T1-9 【エージェント】デザインアセットを配置する
   - 依存: T1-3
   - リポジトリ直下の `ondemandclass_mspp_converter_tokens.css` → `src/lib/styles/tokens.css`（値は変更しない。冒頭に原本の説明コメントを1行追加するのみ）
@@ -175,6 +179,7 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - テスト補助: package.rs のテスト用zip作成関数を `#[cfg(test)] pub(crate) fn write_test_zip` に移し、他モジュールのテストからも使えるようにした
     - テスト: presentation 12件（parse 6件・resolve 4件・slide_order 2件。sldIdLst順がrelsの記載順・ファイル名の数字順と異なるケースを含む）。全体で `cargo test --lib` 51件成功、`cargo clippy --all-targets` 警告0、`cargo fmt --check` 差分なし
     - 実ファイル確認: 一時的な結合テストで `samples/` のppsx 2点を `slide_order` に通し、どちらも33枚を解決した（どちらも sldIdLst順＝slide1〜33の順）。一時テストと `tests/` フォルダは確認後に削除した
+    - 再検証（261002）: 実pptxでの確認は T3-4 の再検証メモにまとめた
 - [x] T3-3 【エージェント】`pptx/slide.rs`（図形・p:timing・advTm・動画検出）を実装する
   - 依存: T3-1
   - `parse_slide` は XML文字列を入力にする純粋関数とし、単体テストを書く
@@ -198,6 +203,7 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 音声図形が1つで、timingのspidと一致し、`ppt/media/media{n}.m4a` に解決できる（リンク切れ0）
       - 動画なし
       - advTm を取得できる（7.492〜287.22秒）
+    - 再検証（261002）: 実pptxでの確認は T3-4 の再検証メモにまとめた
 - [x] T3-4 【エージェント】`pptx/mod.rs`（`extract_slide_audio_map`）とコマンド `extract_pptx` を実装し、登録する
   - 依存: T3-2, T3-3
   - 実施メモ:
@@ -219,6 +225,9 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 実ファイル確認: 一時的な結合テストで、`samples/` のppsx 2点を `extract_from_file` に通した（一時テストは確認後に削除）
       - どちらも33枚・音声あり33枚・警告なし。JSONのキーはスペックの `SlideAudioEntry` どおり
       - 所要時間はdebugビルドで0.15〜0.33秒
+    - 再検証（261002、変更 `261002133633_change_sample_formats_and_release.md`）: 一時的な結合テストで、前編の実pptxと実ppsxを `extract_from_file` に通した（一時テストは確認後に削除）。`extract_from_file` は `slide_order`・`parse_slide`・`resolve_audio` を通るため、T3-2・T3-3 の実ファイル確認の再検証を兼ねる
+      - どちらも33枚・音声あり33枚・リンク切れ0・警告なし・advTm 33件（7.492〜266.992秒）
+      - `SlideAudioMap` のJSON（5,185バイト）が pptx と ppsx で完全に一致した
     - 未確認: フロントからの `invoke("extract_pptx")` の確認は、T5-1（`tauriCommands.ts`）実装後に行う
 - [x] T3-5 【エージェント】テスト用 `PptxBuilder` を作成し、imple 6.1 の主なケースの結合テストを書く
   - 依存: T3-4
@@ -293,6 +302,7 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - copy 方式（`reencoded: false`）、debugビルドで約0.7秒
       - timestamp: 1=0〜34.830249、2=34.830249〜36.830249、3=36.830249（長さ0）、4=36.830249〜184.333356
       - 出力は aac / 44100Hz / 2ch、長さ 184.333356秒で、最後の endSec と一致
+    - 再検証（261002、変更 `261002133633_change_sample_formats_and_release.md`）: 一時的な結合テストで、前編の実pptxと実ppsxに同じ区間（上と同じ構成）で `concat_audio` を実行した（一時テストは確認後に削除）。どちらも copy 方式で、timestamp は上の値と完全に一致した（pptx 2.2秒・ppsx 0.7秒、debugビルド）
     - 未確認: 再エンコード方式・再試行・一時フォルダが残らないことは T4-4 の結合テストで確認する。フロントからの呼び出しは T5-1 以降
 - [x] T4-4 【エージェント】ffmpegを使う結合テスト（`#[ignore]`）を書き、実行する
   - 依存: T4-3, T1-7
@@ -335,6 +345,9 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 存在しない入力は `ProcessFailed`（stderr: `Error: source file could not be loaded`）
       - 3秒で打ち切ると3.3秒で `ProcessTimeout` になり、`soffice.bin` は残らない。その直後の変換も成功する
     - 120秒のタイムアウトは84MBのppsxで2回目9.4秒・初回18.4秒のため余裕がある
+    - 再検証（261002、変更 `261002133633_change_sample_formats_and_release.md`）: 一時的な結合テストで、前編の実pptxと実ppsxを、形式ごとに別の一時フォルダへコピーしてから `convert_to_pdf` で変換した（新規の短いパスのプロファイルを使用。一時テストとプロファイルは確認後に削除）
+      - pptx（新規プロファイル）26.7秒、ppsx（2回目）13.6秒。どちらもPDFは84,785,720バイト・33ページで、入力と同じフォルダに `<basename>.pdf` は作られない
+      - 120秒のタイムアウトには、pptxの初回でも余裕がある
     - 未確認: フロントからの呼び出しは T5-1 以降。macOS では子孫を終了しない（Windows以外は直接の子だけ）
 - [x] T4-6 【エージェント】コマンド `check_outputs_exist`・`write_timestamps_json` を実装し、登録する
   - 依存: T2-3
@@ -415,10 +428,32 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - `cargo fmt --check` / `cargo clippy` / `cargo test` / `cargo test -- --ignored` / `bun run check` / `bun run test` / `bun scripts/contrast-check.ts`
 - [ ] T6-2 【エージェント】手動検証用の派生サンプルを作るスクリプト `scripts/make_samples.ts` を作成し、実行する
   - 依存: T1-8, T4-3
-  - `samples/` の実pptxを元に、ppsx版・リンク切れ版（relsを `TargetMode="External"` に書き換え）・音声形式不一致版（1パートを別サンプルレートに再エンコードして差し替え）・音声なし版を `samples/derived/` に生成する
+  - `samples/` の前編の実pptxと実ppsxをそれぞれ元にして、`samples/derived/pptx/` と `samples/derived/ppsx/` に同じ構成の5種類（原本コピー・リンク切れ版・音声形式不一致版・音声なし版・一部無音版）を生成する。種類とファイル名は imple 6.4
+    - リンク切れ版: relsを `TargetMode="External"` に書き換え
+    - 音声形式不一致版: 1パートを別サンプルレートに再エンコードして差し替え
+    - 一部無音版: 実サンプルは全スライドに音声があるため（T3-3の実施メモ）、W6-8 用に作る
+  - pptx と ppsx は basename が同じため、成果物が衝突しないよう形式ごとにフォルダを分ける
+  - 生成後、各ファイルを `extract_pptx` 相当の処理（一時的な結合テスト等）に通し、意図した警告・音声なしになることを確認する
   - 必要に応じて devDependency に zip操作ライブラリを追加する
-- [ ] T6-3 【エージェント】ppsxがsofficeでPDF化できることを確認する（スペック15章）
-  - 依存: T4-5, T6-2
+- [ ] T6-3 【エージェント】ppsxがsofficeでPDF化できることを、実ファイルのpptxとppsxの両方で確認する（スペック15章）
+  - 依存: T4-5, T1-8（実ppsxがあるため T6-2 への依存を外した）
+  - ppsx の PDF 化は T4-5 の実施時に実ファイルで成功済み。pptx での確認は T4-5 の再検証メモにある。本項目では、両形式の PDF のページ数が一致し、`<basename>.pdf` が作られないことを確認して結果をまとめる
   - できない場合は入力フィルタ指定等で対処し、fixとして記録する
 - [ ] T6-4 【エージェント】`bun run tauri build` でリリースビルドを作成し、実行ファイルと同じフォルダの `app.settings.json` が読まれることを確認する
   - 依存: T6-1
+
+## Phase 7: リリース準備
+- [ ] T7-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
+  - 依存: T6-4
+  - imple 9章
+- [ ] T7-2 【エージェント】`.github/workflows/release.yml` を作成する（`v*` タグで起動、tauri-actionで Windows x64 と macOS Universal をビルド、GitHub Releases にドラフトを作成）
+  - 依存: T1-10, T6-4
+  - tauri-action の版・入力名・権限は作成時点の公式ドキュメントで確認する
+  - アイコンはリポジトリの `src-tauri/icons/` を使い、CIでは生成しない
+- [ ] T7-3 【エージェント】リリース前の確認を行い、コミットメッセージとタグ作成・pushのコマンドを提示して停止する
+  - 依存: T7-1, T7-2
+  - ローカルの `bun run tauri build` が成功すること
+  - `src-tauri/icons/` 一式が `assets/design/` のマスターSVG（最新版）から生成されたものであること（再生成して差分がないこと等で確認する）
+- [ ] T7-4 【ユーザー】コミット・タグ作成・pushを行う
+  - 依存: T7-3
+  - ドラフトリリースの公開は W7-2・W7-3 の確認後にユーザーが行う

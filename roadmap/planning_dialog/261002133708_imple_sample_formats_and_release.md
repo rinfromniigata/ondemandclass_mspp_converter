@@ -1,10 +1,11 @@
-# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム
+# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム＋リリース
 
 - 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
-- 対応tasks: `roadmap/planning_dialog/261001133406_tasks_design_system_integration.md`
-- 対応walk: `roadmap/planning_dialog/261001133444_walk_design_system_integration.md`
-- 前版: `roadmap/archived/260930203148_imple_initial_architecture.md`
-- 変更理由: `roadmap/development/261001132402_change_design_system.md`
+- 対応tasks: `roadmap/planning_dialog/261002133709_tasks_sample_formats_and_release.md`
+- 対応walk: `roadmap/planning_dialog/261002133710_walk_sample_formats_and_release.md`
+- 前版: `roadmap/archived/261001133221_imple_design_system_integration.md`
+- 変更理由: `roadmap/development/261002133633_change_sample_formats_and_release.md`（前回: `261001132402_change_design_system.md`）
+- 前版からの変更: 6.4（手動検証用サンプル）と9章（リリース）を追加
 
 本書はスペックシートの3章・6〜8章を実装単位に分解し、モジュールの責務・インターフェース・
 内部処理の方針を定める。スペックと食い違う場合はスペックを正とし、本書を修正する。
@@ -537,6 +538,32 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
 - 対象の組み合わせ：`--color-text`／`--color-text-muted` × `--color-bg`／`--color-surface`／`--color-surface-sunken`／Banner背景、
   `--color-text-on-primary` × `--color-primary`／`--color-primary-strong`、`--color-text-on-secondary` × `--color-secondary`
 
+### 6.4 手動検証用サンプル
+
+- 実際に配布されたファイル（著作物）は `samples/` に置き、Gitでは除外する。**pptx と ppsx の両方**を置く
+  - 前編: pptx・ppsx（同じ内容で形式だけが異なる組）
+  - 後編: ppsx のみ
+- 実ファイル（pptx/ppsx）を前提にする検証は、必ず両方の形式で行う
+- `scripts/make_samples.ts`（Bun実行、T6-2）で、前編の pptx と ppsx から形式ごとのフォルダへ派生サンプルを作る。
+  pptx と ppsx は basename が同じため、同じフォルダで続けて変換すると成果物が上書き確認にかかる。これを避けるため形式ごとにフォルダを分ける
+
+```
+samples/
+├─ 20260930_…（前編）.pptx / .ppsx
+├─ 20260930_…（後編）.ppsx
+└─ derived/
+   ├─ pptx/   ← 下の5種類（拡張子 .pptx）
+   └─ ppsx/   ← 下の5種類（拡張子 .ppsx）
+```
+
+- 派生サンプルの種類（両フォルダで同じ構成。ファイル名は `<種類>.<拡張子>`）
+  - `original`: 原本のコピー
+  - `broken_link`: 1つの音声の rels を `TargetMode="External"` に書き換えたもの（リンク切れ）
+  - `format_mismatch`: 1つの音声パートを別サンプルレートで再エンコードして差し替えたもの
+  - `no_audio`: すべての音声図形と音声メディアを取り除いたもの
+  - `partial_silence`: 一部のスライド（2枚以上）の音声だけを取り除いたもの（`silentSlideHandling` の比較用）
+- 再生成できるよう、スクリプトは `samples/derived/` を作り直す（既存の中身は消してよい）
+
 ---
 
 ## 7. リポジトリへのscaffold導入手順
@@ -557,3 +584,18 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
 - `app.settings.json`
 - `samples/`
 - scaffoldが生成する項目（`node_modules/`、`.svelte-kit/`、`build/`、`src-tauri/target/` 等）
+
+---
+
+## 9. リリース
+
+- バージョンは初回 `0.1.0`。`package.json`・`src-tauri/tauri.conf.json`・`src-tauri/Cargo.toml` の表記をそろえる（現状すべて `0.1.0`）
+- 変更履歴はリポジトリ直下の `CHANGELOG.md`（Keep a Changelog形式）に記録する
+- CIは `.github/workflows/release.yml`
+  - 起動: `v*` タグのpush
+  - ジョブ: tauri-action で Windows x64 と macOS Universal（`--target universal-apple-darwin`）をビルドし、GitHub Releases にドラフトを作成する
+  - アクションの版・入力名・必要な権限（`contents: write`）は、作成時点の tauri-action の公式ドキュメントで確認する
+  - アイコンはリポジトリに含めた `src-tauri/icons/` を使い、CIでは生成しない
+  - ffmpeg・LibreOffice は実行時に外部から呼ぶだけなので、CIに入れない
+- 本アプリの対象OSはWindowsが主（スペック1章）。macOS版はビルドとアイコンの見え方の確認までとし、macOS上での変換動作は保証の対象外とする（子孫プロセスの終了など、Windows前提の実装があるため。T4-5 の実施メモ）
+- インストーラーの設定はスペック15章で未決定のため、tauri の既定（Windowsは NSIS・MSI、macOSは dmg・app）のままとする
