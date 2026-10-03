@@ -1,7 +1,7 @@
 <!--
   画面の確認用ページ（開発時のみ。/dev/screens）
   Tauri を使わずに、サンプルの状態で ProcessingView・ResultView・ConfirmDialog を表示する
-  ?screen=processing-extract|processing|done|partial|failed|dialog、?theme=light|dark で指定する
+  ?screen=processing-extract|processing-parallel|processing|done|partial|failed|dialog、?theme=light|dark で指定する
 -->
 <script lang="ts">
   import { onMount } from "svelte";
@@ -12,7 +12,7 @@
   import { requestConfirm } from "$lib/confirmDialog";
   import type { PipelineState, StepResult } from "$lib/steps/types";
 
-  const SCREENS = ["processing-extract", "processing", "done", "partial", "failed", "dialog"] as const;
+  const SCREENS = ["processing-extract", "processing-parallel", "processing", "done", "partial", "failed", "dialog"] as const;
   type Screen = (typeof SCREENS)[number];
 
   const params = new URLSearchParams(location.search);
@@ -31,12 +31,21 @@
 
   const samples: Record<Exclude<Screen, "dialog">, PipelineState> = {
     "processing-extract": { view: "processing", inputPath: input, running: ["pptx解析"], results: [], progress: {} },
+    // 音声結合（バーと割合）と PDF変換（不定形）を並行実行している
+    "processing-parallel": {
+      view: "processing",
+      inputPath: input,
+      running: ["音声結合", "PDF変換"],
+      results: [extract],
+      progress: { 音声結合: 0.12 },
+    },
+    // PDF変換が先に終わり、音声結合だけが続いている
     processing: {
       view: "processing",
       inputPath: input,
       running: ["音声結合"],
       results: [extract, ok("PDF変換", "PDFに変換しました")],
-      progress: {},
+      progress: { 音声結合: 0.68 },
     },
     done: {
       view: "done",

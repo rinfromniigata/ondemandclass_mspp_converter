@@ -6,7 +6,15 @@
   import ListItem from "./ui/ListItem.svelte";
   import type { StepResult } from "../steps/types";
 
-  let { results, running = [] }: { results: StepResult[]; running?: string[] } = $props();
+  let {
+    results,
+    running = [],
+    progress = {},
+  }: {
+    results: StepResult[];
+    running?: string[];
+    progress?: Record<string, number>; // 実行中ステップの進捗（0〜1）。値のあるステップだけバーと割合で表示する
+  } = $props();
 
   function statusOf(r: StepResult): "success" | "warning" | "error" {
     if (!r.success) return "error";
@@ -19,7 +27,7 @@
     <ListItem status={statusOf(r)} label={r.stepName} detail={r.message} />
   {/each}
   {#each running as name (name)}
-    <ListItem status="running" label={name} />
+    <ListItem status="running" label={name} progress={progress[name]} />
   {/each}
 </ul>
 

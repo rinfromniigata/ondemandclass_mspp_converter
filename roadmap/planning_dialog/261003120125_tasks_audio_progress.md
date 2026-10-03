@@ -538,9 +538,19 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
     - テスト: audioConcatStep 1件・orchestrator 2件・pipelineController 3件を追加し、既存の呼び出し引数とログの期待値を更新した。`bun run test` 終了コード0（5ファイル61件。前回55件）、`bun run check` エラー0・警告0（371ファイル）
     - 途中で、追加した orchestrator のテストが1件失敗した。差し替えたモックが `exec:` のログを残していなかったためで（テスト側の誤り）、モックでログを残すよう直して合格した
     - Channel を通した実機での受け渡しは、Vitest（node 環境）では確かめられない。画面表示を作る T7-10 の後、W7-6 で確認する
-- [ ] T7-10 【エージェント】`ProgressIndicator`（確定型 `value`）・`ListItem`（`progress`）・`StepLog`・`ProcessingView` を変更し、`/dev/ui` に確定型（0%・42%・100%）、`/dev/screens` に音声結合の進捗中の processing 画面の見本を追加する
+- [x] T7-10 【エージェント】`ProgressIndicator`（確定型 `value`）・`ListItem`（`progress`）・`StepLog`・`ProcessingView` を変更し、`/dev/ui` に確定型（0%・42%・100%）、`/dev/screens` に音声結合の進捗中の processing 画面の見本を追加する
   - 依存: T5-9, T7-9
   - imple 5.3・5.4。色・寸法はトークン経由のみ
+  - 実施メモ（実行結果 261003132955）:
+    - `ProgressIndicator`: `value`（0〜1）があれば確定型にする。バー（高さ `--space-2xs`、角丸 `--radius-full`、塗りは `--color-primary`、トラックは不定形と同じ `color-mix(currentColor 24%)`）と、右に割合（`Math.floor(value*100)`＋「%」、`--font-size-sm`・`--color-text-muted`・`tabular-nums`）。塗りは `scaleX` で伸ばし、`--motion-duration-fast` で遷移する（reduced-motion 時は base.css でトークンが0msになる）。`role="progressbar"`・`aria-valuemin/max/now`・`aria-valuetext` を付けた。範囲外は丸め、NaN は0
+    - `ListItem`: `progress` を追加。処理中かつ値があるときは leading を空にして幅だけ保ち（`min-width: var(--space-lg)`＝24px）、2行目に確定型を出す。`.body` を `flex: 1` にしてバーを行の幅いっぱいに広げた
+    - `StepLog`: `progress` を受け取り、実行中の行に `progress[name]` を渡す。`ProcessingView` は `pipeline.progress` を渡す（ステップ名での分岐はしない）
+    - `/dev/ui`: ListItem に進捗ありの音声結合（スライダーと連動）と不定形の PDF変換を追加。ProgressIndicator に確定型の 0%・42%・100% と、スライダーで値を変えられる例を追加
+    - `/dev/screens`: `processing-parallel`（音声結合 12%＋PDF変換が実行中）を追加し、既存の `processing`（PDF変換は完了、音声結合のみ実行中）に 68% を設定した
+    - 見た目の確認: `bun run dev` で開発サーバーを起動し、Edge のヘッドレスモード（スクラッチ領域の一時プロファイル）でスクリーンショットを撮った。`/dev/screens` の processing-parallel（ライト、720×520・最小の480×360）・processing（ダーク）、`/dev/ui`（ライト・ダーク）。音声結合の行だけがバー＋割合、PDF変換は回転表示、leading の列がそろうこと、480px幅でも崩れないことを確認した。確認後に開発サーバーを止めた
+    - 確認中の修正: 割合テキストの最小幅を 4ch にしていたところ、「100%」が収まらず100%の行だけバーが短くなっていた（値が100%になる瞬間にバーの長さが揺れる）。5ch に広げ、0%・42%・100% でバーの右端がそろうことを撮り直して確認した
+    - ライトモードのトラック（`--color-primary` の24%）は白背景でかなり淡い。進み具合は割合のテキストでも示しているため、判別はテキストで担保する（スペック3章の方針どおり）。実機での見え方は W7-6 で確認する
+    - 結果: `bun run check` エラー0・警告0（371ファイル）、`bun run test` 61件すべて成功
 - [ ] T7-11 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
   - 依存: T7-10
   - `bun run check`・`bun run test`・`cargo test`・`cargo test -- --ignored`（ffmpeg の環境変数つき）

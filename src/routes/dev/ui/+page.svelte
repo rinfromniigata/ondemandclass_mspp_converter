@@ -23,6 +23,7 @@
   let dialogOpen = $state(false);
   let dragged = $state(false);
   let lastAction = $state("（まだ押していません）");
+  let demoProgress = $state(0.42);
 
   $effect(() => {
     if (theme === "system") document.documentElement.removeAttribute("data-theme");
@@ -75,7 +76,8 @@
     <h2>ListItem</h2>
     <Card>
       <ul class="list">
-        <ListItem status="running" label="音声結合" />
+        <ListItem status="running" label="音声結合" progress={demoProgress} />
+        <ListItem status="running" label="PDF変換" />
         <ListItem status="success" label="pptx解析" detail="12枚のスライドを解析しました" />
         <ListItem status="warning" label="PDF変換" detail="PDFに変換しました" />
         <ListItem
@@ -93,6 +95,21 @@
     <div class="row">
       <ProgressIndicator size="sm" label="処理中" />
       <ProgressIndicator size="lg" label="pptxを解析しています" />
+    </div>
+    <h3>確定型（value あり）</h3>
+    <p class="note">
+      バーの右に割合を表示する。値を変えるとバーが伸び縮みし、アニメーション効果をオフにすると動きなしで値だけ変わる。
+      上の ListItem（音声結合）もこの値で表示する。
+    </p>
+    <div class="stack-wide">
+      <ProgressIndicator value={0} label="0%の例" />
+      <ProgressIndicator value={0.42} label="42%の例" />
+      <ProgressIndicator value={1} label="100%の例" />
+      <label class="slider">
+        <span>値を変える</span>
+        <input type="range" min="0" max="1" step="0.01" bind:value={demoProgress} />
+        <ProgressIndicator value={demoProgress} label="操作できる例" />
+      </label>
     </div>
   </section>
 
@@ -206,6 +223,19 @@
 
   .list {
     padding: 0;
+  }
+
+  h3 {
+    margin: var(--space-md) 0 var(--space-xs);
+    font-size: var(--font-size-base);
+  }
+
+  .slider {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
   }
 
   .mono {

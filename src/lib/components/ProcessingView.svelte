@@ -1,6 +1,7 @@
 <!--
   processing 画面。pptx解析中は中央に ProgressIndicator を1つ、以降は処理ログを表示する
-  段階表示（「1/4」等）はしない
+  進捗の値があるステップ（音声結合）の行はバーと割合で、それ以外は不定形で表示する。どのステップに値があるかは Orchestrator が決める
+  段階表示（「1/4」等）と全体の進捗はしない
 -->
 <script lang="ts">
   import { fileNameOf } from "../outputPaths";
@@ -28,7 +29,7 @@
     </div>
   {:else}
     <Card elevation={1}>
-      <StepLog results={pipeline.results} running={pipeline.running} />
+      <StepLog results={pipeline.results} running={pipeline.running} progress={pipeline.progress} />
     </Card>
   {/if}
 </div>
