@@ -449,10 +449,17 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 確認: `src-tauri/tests/derived_samples.rs`（6件、すべて `#[ignore]`）を追加し、`FFPROBE_PATH` を設定して `cargo test --test derived_samples -- --ignored` を実行した。pptx・ppsx の両方で6件とも成功。リンク切れはスライド3だけで「スライド3：音声がリンク切れのため無音として扱います」の警告1件、形式不一致版はスライド2の音声だけサンプルレートが異なり（コーデック・チャンネル数は同じ）、音声なし版は全スライド音声なし・警告なし、一部無音版はスライド3・5だけ音声なし・警告なし、全派生版でスライド数と自動切り替え時間が原本と一致
     - 確認: XMLを加工した `no_audio.pptx` と `partial_silence.ppsx` を soffice（`--headless --convert-to pdf`）で変換し、どちらも33ページのPDFになることを確かめた
     - 再生成する場合は、スクリプトを再実行すれば `samples/derived/` が作り直される。加工対象のスライドを変える場合は、スクリプトとテストの定数を合わせること
-- [ ] T6-3 【エージェント】ppsxがsofficeでPDF化できることを、実ファイルのpptxとppsxの両方で確認する（スペック15章）
+- [x] T6-3 【エージェント】ppsxがsofficeでPDF化できることを、実ファイルのpptxとppsxの両方で確認する（スペック15章）
   - 依存: T4-5, T1-8（実ppsxがあるため T6-2 への依存を外した）
   - ppsx の PDF 化は T4-5 の実施時に実ファイルで成功済み。pptx での確認は T4-5 の再検証メモにある。本項目では、両形式の PDF のページ数が一致し、`<basename>.pdf` が作られないことを確認して結果をまとめる
   - できない場合は入力フィルタ指定等で対処し、fixとして記録する
+  - 実施メモ（実行結果 261003093236）: ppsx は入力フィルタを指定しなくても pptx と同様にPDF化でき、対処（fix）は不要だった
+    - 方法: 一時的な結合テストで、`samples/` の前編の実pptxと実ppsxを形式ごとに別の一時フォルダへコピーし、`convert_to_pdf`（アプリと同じ引数）で `<basename>_slides.pdf` へ変換した。soffice は LibreOffice 26.8.0.3（`app.settings.json` のパス）、プロファイルはアプリと同じ `%LOCALAPPDATA%\com.rinfromniigata.ondemandclass-mspp-converter\lo_profile`。確認後、一時テストは削除した
+    - pptx: 9.6秒、84,785,720バイト、33ページ。ppsx: 9.7秒、84,785,720バイト、33ページ。両形式のページ数は一致し、`extract_from_file` のスライド数（33）とも一致する
+    - どちらも、変換後のフォルダには入力ファイルと `_slides.pdf` の2つだけで、`<basename>.pdf` は作られない
+    - 変換後に `soffice` / `soffice.bin` のプロセスは残っていない
+    - PDFのサイズとページ数は T4-5 の結果（84,785,720バイト・33ページ）と一致する。所要時間は T4-5（ppsx 9.4〜18.4秒、pptx 初回26.7秒）と同程度で、120秒のタイムアウトに余裕がある
+    - 見た目（フォント・図形）の確認は W6-3（【ユーザー】）で行う
 - [ ] T6-4 【エージェント】`bun run tauri build` でリリースビルドを作成し、実行ファイルと同じフォルダの `app.settings.json` が読まれることを確認する
   - 依存: T6-1
 
