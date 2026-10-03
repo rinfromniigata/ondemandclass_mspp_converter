@@ -551,9 +551,18 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
     - 確認中の修正: 割合テキストの最小幅を 4ch にしていたところ、「100%」が収まらず100%の行だけバーが短くなっていた（値が100%になる瞬間にバーの長さが揺れる）。5ch に広げ、0%・42%・100% でバーの右端がそろうことを撮り直して確認した
     - ライトモードのトラック（`--color-primary` の24%）は白背景でかなり淡い。進み具合は割合のテキストでも示しているため、判別はテキストで担保する（スペック3章の方針どおり）。実機での見え方は W7-6 で確認する
     - 結果: `bun run check` エラー0・警告0（371ファイル）、`bun run test` 61件すべて成功
-- [ ] T7-11 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
+- [x] T7-11 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
   - 依存: T7-10
   - `bun run check`・`bun run test`・`cargo test`・`cargo test -- --ignored`（ffmpeg の環境変数つき）
+  - 実施メモ（実行結果 261003133653）: すべて合格
+    - `bun run check`: エラー0・警告0（371ファイル）
+    - `bun run test`: 5ファイル61件すべて成功
+    - `cargo fmt --check`: 差分なし。`cargo clippy --all-targets`: 警告・エラーなし
+    - `cargo test`: lib 141件・`pptx_extract` 9件すべて成功
+    - `cargo test -- --ignored`（`FFMPEG_PATH`・`FFPROBE_PATH` を WinGet Links のパスに設定）: `concat_integration` 9件（進捗の確認を含む、9.13秒）・`derived_samples` 6件（1.77秒）すべて成功
+    - `bun run tauri build`: 終了コード0（全体251秒、Rustのreleaseビルド3分31秒）。警告は W1-1・T6-4 と同じ `linker_messages`（MSVCリンカーの情報メッセージ）1件のみ
+    - 生成物（いずれも今回のビルドで更新）: `src-tauri/target/release/ondemandclass_mspp_converter.exe`（4,820,992バイト。T6-4 時点は4,803,584バイト）、`bundle/msi/ondemandclass_mspp_converter_0.1.0_x64_en-US.msi`（2.20 MiB）、`bundle/nsis/ondemandclass_mspp_converter_0.1.0_x64-setup.exe`（1.51 MiB）
+    - リリースビルドでの進捗表示の実機確認は W7-10（【ユーザー】）で行う
 
 ## Phase 8: リリース準備
 - [ ] T8-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
