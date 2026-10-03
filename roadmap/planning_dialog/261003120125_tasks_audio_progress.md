@@ -488,9 +488,22 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
     - 結果: `cargo test` 終了コード0。lib 125件（process 12件。既存7件はそのまま成功）、`pptx_extract` 9件すべて成功。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし
     - 既存の動作の確認として、ffmpeg 結合テスト（`FFMPEG_PATH`・`FFPROBE_PATH` を設定した `cargo test --test concat_integration -- --ignored`）も9件すべて成功した（7.96秒）
     - 補足: Windows の `set /p`（改行なしの出力に使用）は、入力が空だと終了コード1を返す。このため改行のない最後の行のテストでは、終了コードを確かめていない
-- [ ] T7-7 【エージェント】`audio/progress.rs`（`ProgressReporter`・`Span`・`parse_out_time_sec`）を実装し、単体テストを書く
+- [x] T7-7 【エージェント】`audio/progress.rs`（`ProgressReporter`・`Span`・`parse_out_time_sec`）を実装し、単体テストを書く
   - 依存: T7-5
   - imple 3.6 progress.rs。配分の定数は初期値で置き、T7-8 で見直す
+  - 実施メモ（実行結果 261003122600）:
+    - imple 3.6 の `ProgressSink`・`ProgressReporter`（`report`・`current`）・`Span`（`FULL`・`at`・`split`）・`parse_out_time_sec` を実装した
+    - imple にない補助として次を追加した（T7-8 で `concat_audio` から使う。インターフェースの変更ではなく内部の補助関数）
+      - `fraction(done, total)`: 件数の割合。対象0件は 1
+      - `time_fraction(out_sec, total_sec)`: 出力済み秒 ÷ 総尺。総尺が0以下・有限でなければ 0
+      - `StageWeights`（`COPY`・`REENCODE`・`split(rest)`）: 取り出し後の残りを「区間生成・結合」に分ける比。再試行時は `split(Span { start: reporter.current(), end: 1.0 })` で使う
+    - 配分の初期値: `EXTRACT_SHARE = 0.2`（両方式共通）、copy は区間生成 0.1・結合 0.7、再エンコードは区間生成 0.5・結合 0.4（残り 0.8 をこの比で配る）
+    - 細かな仕様
+      - `Span::split` は最後の範囲の終わりを `self.end` に一致させる（浮動小数点の誤差で 1 に届かないことを防ぐ）。重みが不正（合計0以下・負・NaN）なら等分
+      - `ProgressReporter` は1%ちょうどの増加を浮動小数点の誤差で取りこぼさないよう、1e-9 の余裕を持たせた。範囲外は丸め、NaN は無視、1 は1回だけ必ず送る
+      - `parse_out_time_sec` は前後の空白・改行を無視し、負の値は0秒にする。`out_time_ms`（ffmpeg ではマイクロ秒が入る紛らわしいキー）・`out_time`・`N/A` は `None`
+    - ffmpeg 9.0.2 での確認: `-progress pipe:1 -nostats` の出力に `out_time_us=3000000`（3秒の音声）と `out_time_ms=3000000`（同じくマイクロ秒）・`progress=end` が出ることを確認した
+    - 単体テスト12件を追加した。`cargo test --lib` 終了コード0（137件すべて成功）。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし
 - [ ] T7-8 【エージェント】`concat_audio` に進捗通知を組み込み（最終結合は `-progress pipe:1 -nostats` と `run_with_timeout_streaming`）、`run_ffmpeg_concat` に `Channel<f64>` 引数を追加する。結合テスト（`#[ignore]`）に進捗の記録と確認を加える
   - 依存: T4-3, T4-4, T7-6, T7-7
   - `Channel` の API はインストール済みの tauri 2.12.1 で確認する

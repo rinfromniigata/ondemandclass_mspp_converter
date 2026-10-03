@@ -1,6 +1,7 @@
 pub mod concat;
 pub mod plan;
 pub mod probe;
+pub mod progress;
 pub mod timeline;
 
 use std::time::Duration;
