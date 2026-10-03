@@ -11,7 +11,14 @@ const MIN_STEP: f64 = 0.01;
 /// 浮動小数点の誤差で 1% ちょうどの増加を取りこぼさないための余裕
 const EPSILON: f64 = 1e-9;
 
-/// 取り出し（音声区間の書き出し＋ffprobe）に配分する割合。結合方式は取り出しの後に決まるため、両方式で共通にする
+/// `finish` より前に送る割合の上限（結合を終えても、出力の保存に失敗しうるため 1 にしない）
+const BEFORE_FINISH: f64 = 0.99;
+
+/// 取り出し（音声区間の書き出し＋ffprobe）に配分する割合。結合方式は取り出しの後に決まるため、両方式で共通にする。
+///
+/// 実測（T7-8、release、33区間・約52分の音声）では取り出しが両方式とも約6秒で、全体に占める割合は
+/// copy 方式で約8割（全体7秒）、再エンコード方式で約5%（全体125秒）と大きく異なる。
+/// 時間のかかる再エンコード方式の表示を優先しつつ、copy 方式で取り出し中に止まって見えないよう中間の値にする
 pub const EXTRACT_SHARE: f64 = 0.2;
 
 /// 取り出しの後の残りを「区間生成」と「結合」に分ける比
@@ -22,15 +29,17 @@ pub struct StageWeights {
 }
 
 impl StageWeights {
-    /// copy 方式: 区間生成（無音区間の生成）0.1、結合 0.7
+    /// copy 方式: 区間生成（無音区間の生成）0.1、結合 0.7。
+    /// 実測では無音区間なしで 0秒：1.1秒、一部無音で 1.1秒：1.1秒。どちらも短いため初期値のままとする
     pub const COPY: StageWeights = StageWeights {
         generate: 0.1,
         concat: 0.7,
     };
-    /// 再エンコード方式: 区間生成（各区間の WAV 正規化＋ffprobe）0.5、結合 0.4
+    /// 再エンコード方式: 区間生成（各区間の WAV 正規化＋ffprobe）0.12、結合（AAC エンコード）0.68。
+    /// 実測の 16.9秒：101.6秒（約 14：86）に合わせる
     pub const REENCODE: StageWeights = StageWeights {
-        generate: 0.5,
-        concat: 0.4,
+        generate: 0.12,
+        concat: 0.68,
     };
 
     /// `rest` をこの比で（区間生成, 結合）の範囲に分ける
@@ -137,6 +146,72 @@ impl<'a> ProgressReporter<'a> {
     }
 }
 
+/// 音声結合1回分の進捗。「取り出し → 区間生成 → 結合」の各段階の進み具合を全体の割合にして通知する。
+///
+/// 区間生成と結合の範囲は、結合方式が決まるまで copy 方式の比で仮に置き、
+/// `start_mode` で決まった方式の比に置き直す
+pub struct ConcatProgress<'a> {
+    reporter: ProgressReporter<'a>,
+    extract: Span,
+    generate: Span,
+    concat: Span,
+}
+
+impl<'a> ConcatProgress<'a> {
+    pub fn new(sink: ProgressSink<'a>) -> Self {
+        let [extract, rest] = Span::FULL.split([EXTRACT_SHARE, 1.0 - EXTRACT_SHARE]);
+        let (generate, concat) = StageWeights::COPY.split(rest);
+        Self {
+            reporter: ProgressReporter::new(sink),
+            extract,
+            generate,
+            concat,
+        }
+    }
+
+    /// 取り出しで `total` 区間のうち `done` 区間を終えた
+    pub fn extracted(&mut self, done: usize, total: usize) {
+        self.reporter.report(self.extract.at(fraction(done, total)));
+    }
+
+    /// 結合方式が決まった。取り出しの後の残りを `weights` の比で区間生成と結合に分ける
+    pub fn start_mode(&mut self, weights: StageWeights) {
+        let rest = Span {
+            start: self.extract.end,
+            end: 1.0,
+        };
+        (self.generate, self.concat) = weights.split(rest);
+    }
+
+    /// copy 結合が失敗し、`weights` の方式で区間生成からやり直す。
+    /// 割合を戻さないよう、送信済みの値から 1 までを新しい範囲とする
+    pub fn restart_with(&mut self, weights: StageWeights) {
+        let rest = Span {
+            start: self.reporter.current(),
+            end: 1.0,
+        };
+        (self.generate, self.concat) = weights.split(rest);
+    }
+
+    /// 区間生成で `total` 区間のうち `done` 区間を終えた
+    pub fn generated(&mut self, done: usize, total: usize) {
+        self.reporter
+            .report(self.generate.at(fraction(done, total)));
+    }
+
+    /// 結合で `total_sec` 秒のうち `out_sec` 秒を書き出した。
+    /// 1 は出力の保存後（`finish`）にだけ送るため、ここでは `BEFORE_FINISH` で止める
+    pub fn concatenating(&mut self, out_sec: f64, total_sec: f64) {
+        let ratio = self.concat.at(time_fraction(out_sec, total_sec));
+        self.reporter.report(ratio.min(BEFORE_FINISH));
+    }
+
+    /// 出力を保存し終えた（1 を通知する）
+    pub fn finish(&mut self) {
+        self.reporter.report(1.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,9 +312,12 @@ mod tests {
             end: 1.0,
         });
         assert_close(generate.start, 0.55);
-        assert_close(generate.end, 0.8);
+        assert_close(generate.end, 0.55 + 0.45 * REENCODE_GENERATE);
         assert_eq!(concat.end, 1.0);
     }
+
+    /// 再エンコード方式で、取り出し後の残りのうち区間生成が占める比（0.12 : 0.68）
+    const REENCODE_GENERATE: f64 = 0.12 / 0.8;
 
     #[test]
     fn fractions() {
@@ -279,6 +357,97 @@ mod tests {
     #[test]
     fn reporter_clamps_and_skips_nan() {
         assert_eq!(reported(&[-0.5, f64::NAN, 0.5, 3.0]), [0.5, 1.0]);
+    }
+
+    /// 送られた割合が 0〜1 に収まり、単調に増える
+    fn assert_monotonic(sent: &[f64]) {
+        assert!(sent.iter().all(|r| (0.0..=1.0).contains(r)), "{sent:?}");
+        assert!(sent.windows(2).all(|w| w[0] < w[1]), "{sent:?}");
+    }
+
+    #[test]
+    fn concat_progress_copy_mode_runs_through_stages() {
+        let mut sent = Vec::new();
+        {
+            let mut sink = |r| sent.push(r);
+            let mut p = ConcatProgress::new(&mut sink);
+            p.extracted(1, 2);
+            p.extracted(2, 2);
+            p.start_mode(StageWeights::COPY);
+            p.generated(2, 2);
+            p.concatenating(30.0, 60.0);
+            p.concatenating(60.0, 60.0);
+            p.finish();
+        }
+        assert_monotonic(&sent);
+        // 取り出し 0.2、区間生成 0.1、結合 0.7。結合を終えても 0.99 で止め、1 は finish で送る
+        let expected = [0.1, 0.2, 0.3, 0.65, 0.99, 1.0];
+        assert_eq!(sent.len(), expected.len(), "{sent:?}");
+        for (actual, expected) in sent.iter().zip(expected) {
+            assert_close(*actual, expected);
+        }
+    }
+
+    #[test]
+    fn concat_progress_reencode_mode_uses_its_weights() {
+        let mut sent = Vec::new();
+        {
+            let mut sink = |r| sent.push(r);
+            let mut p = ConcatProgress::new(&mut sink);
+            p.extracted(1, 1);
+            p.start_mode(StageWeights::REENCODE);
+            p.generated(1, 2);
+            p.generated(2, 2);
+            p.concatenating(10.0, 10.0);
+            p.finish();
+        }
+        assert_monotonic(&sent);
+        // 残り 0.8 を 0.12 : 0.68 で分ける → 区間生成は 0.2〜0.32
+        assert_close(sent[0], 0.2);
+        assert_close(sent[1], 0.2 + 0.8 * REENCODE_GENERATE / 2.0);
+        assert_close(sent[2], 0.32);
+        assert_eq!(*sent.last().unwrap(), 1.0);
+    }
+
+    #[test]
+    fn concat_progress_restart_does_not_go_back() {
+        let mut sent = Vec::new();
+        {
+            let mut sink = |r| sent.push(r);
+            let mut p = ConcatProgress::new(&mut sink);
+            p.extracted(1, 1);
+            p.start_mode(StageWeights::COPY);
+            p.generated(1, 1);
+            p.concatenating(5.0, 10.0); // copy 結合の途中（0.65）で失敗した
+            p.restart_with(StageWeights::REENCODE);
+            p.generated(0, 2); // やり直しの最初は起点のまま（送らない）
+            p.generated(1, 2);
+            p.generated(2, 2);
+            p.concatenating(10.0, 10.0);
+            p.finish();
+        }
+        assert_monotonic(&sent);
+        assert_close(sent[2], 0.65);
+        // 再試行の区間生成は 0.65〜0.65+0.35×0.15
+        assert_close(sent[3], 0.65 + 0.35 * REENCODE_GENERATE / 2.0);
+        assert_eq!(*sent.last().unwrap(), 1.0);
+    }
+
+    #[test]
+    fn concat_progress_does_not_send_one_without_finish() {
+        let mut sent = Vec::new();
+        {
+            let mut sink = |r| sent.push(r);
+            let mut p = ConcatProgress::new(&mut sink);
+            p.extracted(1, 1);
+            p.start_mode(StageWeights::COPY);
+            p.generated(1, 1);
+            // 総尺が不明（0秒）なら結合中は進めない
+            p.concatenating(5.0, 0.0);
+            // 結合を終えても、保存前（finish 前）は 1 にしない
+            p.concatenating(10.0, 10.0);
+        }
+        assert!(sent.iter().all(|r| *r < 1.0), "{sent:?}");
     }
 
     #[test]

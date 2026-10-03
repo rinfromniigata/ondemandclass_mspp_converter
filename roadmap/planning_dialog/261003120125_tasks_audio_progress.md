@@ -504,10 +504,27 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
       - `parse_out_time_sec` は前後の空白・改行を無視し、負の値は0秒にする。`out_time_ms`（ffmpeg ではマイクロ秒が入る紛らわしいキー）・`out_time`・`N/A` は `None`
     - ffmpeg 9.0.2 での確認: `-progress pipe:1 -nostats` の出力に `out_time_us=3000000`（3秒の音声）と `out_time_ms=3000000`（同じくマイクロ秒）・`progress=end` が出ることを確認した
     - 単体テスト12件を追加した。`cargo test --lib` 終了コード0（137件すべて成功）。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし
-- [ ] T7-8 【エージェント】`concat_audio` に進捗通知を組み込み（最終結合は `-progress pipe:1 -nostats` と `run_with_timeout_streaming`）、`run_ffmpeg_concat` に `Channel<f64>` 引数を追加する。結合テスト（`#[ignore]`）に進捗の記録と確認を加える
+- [x] T7-8 【エージェント】`concat_audio` に進捗通知を組み込み（最終結合は `-progress pipe:1 -nostats` と `run_with_timeout_streaming`）、`run_ffmpeg_concat` に `Channel<f64>` 引数を追加する。結合テスト（`#[ignore]`）に進捗の記録と確認を加える
   - 依存: T4-3, T4-4, T7-6, T7-7
   - `Channel` の API はインストール済みの tauri 2.12.1 で確認する
   - 実サンプル（`samples/derived/pptx/original.pptx` と `format_mismatch.pptx`）で、copy・再エンコードそれぞれの段階ごとの所要時間を測り、配分の定数を決めて実施メモに残す。計測用の一時テストは確認後に削除する
+  - 実施メモ（実行結果 261003124708）:
+    - `Channel` の確認（tauri 2.12.1 のソース `src/ipc/channel.rs`）: `Channel<TSend>` は `CommandArg` を実装しておりコマンド引数で直接受け取れる。送信は `send(&self, data) -> crate::Result<()>`
+    - `audio/progress.rs` に `ConcatProgress` を追加した。段階の進行（`extracted`・`start_mode`・`restart_with`・`generated`・`concatenating`・`finish`）をまとめ、`concat.rs` からはこれだけを呼ぶ（imple にない内部の補助。インターフェースの変更ではない）
+      - copy 結合の失敗から再エンコードで再試行する経路は、結合テストでは ffmpeg を失敗させる条件を作れないため、`ConcatProgress` の単体テストで割合が戻らないことを確かめた
+      - `concatenating` は 0.99 を上限にし、1 は出力を `out_path` へ保存し終えた後の `finish` でだけ送る（保存に失敗した場合に 1 を送らないため。imple 3.6 の「エラー時は 1 を送らない」を満たすため）
+    - `concat.rs`: 取り出し・区間生成は区間を1つ終えるごとに、最終結合は `run_ffmpeg_with_progress`（`-progress pipe:1 -nostats` ＋ `run_with_timeout_streaming`）で `out_time_us` ÷ 区間の長さの合計で進める。それ以外の ffmpeg/ffprobe の呼び出しは従来どおり
+    - `commands/audio_process.rs`: `on_progress: Channel<f64>` を追加し、送信の失敗は無視する
+    - 結合テスト: `run()` で全9ケースの通知を記録し、0〜1 に収まること・単調増加・成功時は最後が 1 で、結合中の通知（0.9以上1未満。`-progress` 由来）があること・失敗時は 1 を送らないことを確かめるようにした
+    - 実測（`cargo test --release` の一時テスト。33区間、音声 約3107秒）
+      - copy（`original.pptx`）: 全体 7.15秒。取り出し 5.89秒、区間生成 ほぼ0秒（無音区間なし）、結合 1.14秒、保存 0.1秒
+      - copy（`partial_silence.pptx`、無音区間あり）: 全体 7.97秒。取り出し 5.55秒、区間生成 1.11秒、結合 1.12秒
+      - 再エンコード（`format_mismatch.pptx`）: 全体 124.6秒。取り出し 約6.0秒、区間生成 16.9秒、結合 101.6秒
+      - 取り出しは両方式とも約6秒で、全体に占める割合は copy で約8割、再エンコードで約5%。結合方式は取り出しの後でないと決まらないため、どちらにも合う共通の値はない
+    - 配分の決定: `EXTRACT_SHARE = 0.2`（据え置き）、copy は区間生成 0.1・結合 0.7（据え置き）、再エンコードは区間生成 0.12・結合 0.68（実測の 14：86 に合わせて変更）
+      - 時間のかかる再エンコード方式（約2分）の表示を優先した。copy 方式（約7秒）は、取り出しの6秒で 0→20%、残りの約1秒で 20→100% と終盤に速く進む
+    - 結果: `cargo test` 終了コード0（lib 141件・pptx_extract 9件）、ffmpeg 結合テスト9件すべて成功（7.88秒）。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし。計測用の一時テストと出力は削除した
+    - 注意: `run_ffmpeg_concat` の `on_progress` は必須引数のため、T7-9 でフロントエンドが Channel を渡すまで、アプリからの音声結合は引数不足で失敗する
 - [ ] T7-9 【エージェント】TypeScript側を変更する（`tauriCommands.ts` の `runFfmpegConcat`、`AudioConcatStep`、`PipelineCallbacks.onStepProgress` と Orchestrator、`PipelineState.progress` と Controller）。Vitest の単体テストを追加・更新する
   - 依存: T5-6, T7-8
   - imple 4.1・4.3・4.5・4.6・6.2

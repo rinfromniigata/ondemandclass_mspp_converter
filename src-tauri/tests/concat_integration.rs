@@ -157,7 +157,7 @@ fn case(env: &TestEnv, builder: &PptxBuilder) -> Case {
     }
 }
 
-/// 直列に `concat_audio` を実行し、一時フォルダが残っていないことを確かめる
+/// 直列に `concat_audio` を実行し、一時フォルダが残っていないことと、進捗の通知が正しいことを確かめる
 fn run(
     env: &TestEnv,
     case: &Case,
@@ -166,6 +166,7 @@ fn run(
     reencode_on_mismatch: bool,
 ) -> Result<ConcatResult, AppError> {
     let _guard = serial();
+    let mut sent = Vec::new();
     let result = concat_audio(
         &tools(env),
         &case.input,
@@ -173,6 +174,7 @@ fn run(
         segments,
         &case.out,
         reencode_on_mismatch,
+        &mut |ratio| sent.push(ratio),
     );
     let leftovers: Vec<_> = fs::read_dir(&env.work_dir)
         .unwrap()
@@ -182,7 +184,30 @@ fn run(
         leftovers.is_empty(),
         "一時フォルダが残っています: {leftovers:?}"
     );
+    assert_progress(&sent, result.is_ok());
     result
+}
+
+/// 進捗の通知：0〜1 に収まり単調に増える。成功時は結合中の通知（ffmpeg の -progress 由来）が終盤まで届き、最後が 1。
+/// 失敗時は 1 を送らない
+fn assert_progress(sent: &[f64], succeeded: bool) {
+    assert!(
+        sent.iter().all(|r| (0.0..=1.0).contains(r)),
+        "範囲外の割合: {sent:?}"
+    );
+    assert!(
+        sent.windows(2).all(|w| w[0] < w[1]),
+        "単調に増えていない: {sent:?}"
+    );
+    if succeeded {
+        assert_eq!(sent.last(), Some(&1.0), "最後が 1 でない: {sent:?}");
+        assert!(
+            sent.iter().any(|r| (0.9..1.0).contains(r)),
+            "結合の終盤の通知がない: {sent:?}"
+        );
+    } else {
+        assert!(!sent.contains(&1.0), "失敗したのに 1 を送った: {sent:?}");
+    }
 }
 
 fn probe_file(env: &TestEnv, path: &Path) -> AudioInfo {

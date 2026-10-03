@@ -8,12 +8,13 @@ use tempfile::TempDir;
 
 use super::plan::{decide_mode, ConcatMode};
 use super::probe::{probe, AudioInfo};
+use super::progress::{parse_out_time_sec, ConcatProgress, ProgressSink, StageWeights};
 use super::timeline::build_timeline;
 use super::{AudioSegment, ConcatResult, PROCESS_TIMEOUT};
 use crate::error::AppError;
 use crate::fs_util::move_or_copy;
 use crate::pptx::package::PptxPackage;
-use crate::process::run_with_timeout;
+use crate::process::{run_with_timeout, run_with_timeout_streaming};
 
 /// 再エンコード方式で正規化するサンプルレート
 const REENCODE_SAMPLE_RATE: u32 = 48000;
@@ -47,7 +48,9 @@ enum Part {
 /// `segments` を順に結合して `out_path` に書き出し、`slide_indices` の全スライドの区間を返す。
 ///
 /// 作業はすべて一時フォルダ（関数を抜けるとDropで削除）で行い、最後に結果だけを `out_path` へ移す。
-/// 途中で失敗しても既存の `out_path` は壊れない
+/// 途中で失敗しても既存の `out_path` は壊れない。
+///
+/// 進捗は 0〜1 の割合で `on_progress` に通知する（単調増加・1%未満の増加は省く）。1 は出力を保存し終えたときだけ送る
 pub fn concat_audio(
     tools: &FfmpegTools<'_>,
     input: &Path,
@@ -55,15 +58,17 @@ pub fn concat_audio(
     segments: &[AudioSegment],
     out_path: &Path,
     reencode_on_mismatch: bool,
+    on_progress: ProgressSink<'_>,
 ) -> Result<ConcatResult, AppError> {
     validate_segments(slide_indices, segments).map_err(AppError::Message)?;
 
+    let mut progress = ConcatProgress::new(on_progress);
     let tmp = TempDir::new().map_err(|source| AppError::Io {
         context: "一時フォルダを作成できません".into(),
         source,
     })?;
     let dir = tmp.path();
-    let parts = extract_parts(tools, input, segments, dir)?;
+    let parts = extract_parts(tools, input, segments, dir, &mut progress)?;
     let infos: Vec<AudioInfo> = parts
         .iter()
         .filter_map(|part| match part {
@@ -78,24 +83,37 @@ pub fn concat_audio(
             sample_rate,
             channels,
             ..
-        } => match concat_copy(tools, &parts, sample_rate, channels, dir, &output) {
-            Ok(durations) => (durations, false),
-            // copy 結合で ffmpeg が非ゼロ終了した場合だけ再エンコードで再試行する
-            Err(AppError::ProcessFailed { .. }) if reencode_on_mismatch => {
-                let channels = channels.min(2);
-                (
-                    concat_reencode(tools, &parts, channels, dir, &output)?,
-                    true,
-                )
+        } => {
+            progress.start_mode(StageWeights::COPY);
+            match concat_copy(
+                tools,
+                &parts,
+                sample_rate,
+                channels,
+                dir,
+                &output,
+                &mut progress,
+            ) {
+                Ok(durations) => (durations, false),
+                // copy 結合で ffmpeg が非ゼロ終了した場合だけ再エンコードで再試行する
+                Err(AppError::ProcessFailed { .. }) if reencode_on_mismatch => {
+                    progress.restart_with(StageWeights::REENCODE);
+                    let channels = channels.min(2);
+                    (
+                        concat_reencode(tools, &parts, channels, dir, &output, &mut progress)?,
+                        true,
+                    )
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
-        },
+        }
         ConcatMode::Reencode { channels } => {
             if !reencode_on_mismatch {
                 return Err(AppError::Message(REENCODE_DISABLED_MESSAGE.into()));
             }
+            progress.start_mode(StageWeights::REENCODE);
             (
-                concat_reencode(tools, &parts, channels, dir, &output)?,
+                concat_reencode(tools, &parts, channels, dir, &output, &mut progress)?,
                 true,
             )
         }
@@ -106,6 +124,7 @@ pub fn concat_audio(
         context: format!("結合した音声を保存できません（{}）", out_path.display()),
         source,
     })?;
+    progress.finish();
     Ok(ConcatResult {
         timestamps,
         reencoded,
@@ -135,12 +154,14 @@ fn validate_segments(slide_indices: &[u32], segments: &[AudioSegment]) -> Result
     build_timeline(slide_indices, &order).map(|_| ())
 }
 
-/// `media` 区間の音声を pptx から一時フォルダへ書き出し、ffprobe で形式と長さを調べる
+/// `media` 区間の音声を pptx から一時フォルダへ書き出し、ffprobe で形式と長さを調べる。
+/// 区間を1つ終えるごとに取り出しの進捗を進める
 fn extract_parts(
     tools: &FfmpegTools<'_>,
     input: &Path,
     segments: &[AudioSegment],
     dir: &Path,
+    progress: &mut ConcatProgress<'_>,
 ) -> Result<Vec<Part>, AppError> {
     // 音声区間がなければ pptx は開かない
     let mut pkg = None;
@@ -179,6 +200,7 @@ fn extract_parts(
             },
         };
         parts.push(part);
+        progress.extracted(i + 1, segments.len());
     }
     Ok(parts)
 }
@@ -192,6 +214,7 @@ fn concat_copy(
     channels: u32,
     dir: &Path,
     output: &Path,
+    progress: &mut ConcatProgress<'_>,
 ) -> Result<Vec<(u32, f64)>, AppError> {
     let mut names = Vec::with_capacity(parts.len());
     let mut durations = Vec::with_capacity(parts.len());
@@ -221,10 +244,11 @@ fn concat_copy(
                 durations.push((*slide_index, *duration_sec));
             }
         }
+        progress.generated(i + 1, parts.len());
     }
 
     let list = write_concat_list(dir, "list.txt", &names)?;
-    run_ffmpeg(tools.ffmpeg, |cmd| {
+    run_ffmpeg_with_progress(tools.ffmpeg, total_sec(&durations), progress, |cmd| {
         cmd.args(["-f", "concat", "-safe", "0", "-i"])
             .arg(&list)
             .args(["-vn", "-c", "copy", "-movflags", "+faststart"])
@@ -241,6 +265,7 @@ fn concat_reencode(
     channels: u32,
     dir: &Path,
     output: &Path,
+    progress: &mut ConcatProgress<'_>,
 ) -> Result<Vec<(u32, f64)>, AppError> {
     let channels_arg = channels.to_string();
     let rate_arg = REENCODE_SAMPLE_RATE.to_string();
@@ -293,10 +318,11 @@ fn concat_reencode(
         };
         names.push(name);
         durations.push((slide_index, info.duration_sec));
+        progress.generated(i + 1, parts.len());
     }
 
     let list = write_concat_list(dir, "list_norm.txt", &names)?;
-    run_ffmpeg(tools.ffmpeg, |cmd| {
+    run_ffmpeg_with_progress(tools.ffmpeg, total_sec(&durations), progress, |cmd| {
         cmd.args(["-f", "concat", "-safe", "0", "-i"])
             .arg(&list)
             .args(["-c:a", "aac", "-b:a", REENCODE_BITRATE])
@@ -313,6 +339,31 @@ fn run_ffmpeg(ffmpeg: &Path, configure: impl FnOnce(&mut Command)) -> Result<(),
     configure(&mut cmd);
     run_with_timeout(cmd, PROCESS_TIMEOUT)?.ensure_success(ffmpeg)?;
     Ok(())
+}
+
+/// `run_ffmpeg` に `-progress pipe:1 -nostats` を加えて実行し、stdout の `out_time_us` で結合の進捗を進める。
+/// `total_sec` は出力の総尺の見込み（各区間の長さの合計）
+fn run_ffmpeg_with_progress(
+    ffmpeg: &Path,
+    total_sec: f64,
+    progress: &mut ConcatProgress<'_>,
+    configure: impl FnOnce(&mut Command),
+) -> Result<(), AppError> {
+    let mut cmd = Command::new(ffmpeg);
+    cmd.args(["-y", "-v", "error", "-progress", "pipe:1", "-nostats"]);
+    configure(&mut cmd);
+    let mut on_line = |line: &str| {
+        if let Some(out_sec) = parse_out_time_sec(line) {
+            progress.concatenating(out_sec, total_sec);
+        }
+    };
+    run_with_timeout_streaming(cmd, PROCESS_TIMEOUT, &mut on_line)?.ensure_success(ffmpeg)?;
+    Ok(())
+}
+
+/// 区間の長さの合計（秒）
+fn total_sec(durations: &[(u32, f64)]) -> f64 {
+    durations.iter().map(|(_, sec)| sec).sum()
 }
 
 /// anullsrc で `duration_sec` 秒の無音を入力にする引数
@@ -493,6 +544,7 @@ mod tests {
             &[],
             Path::new("out.m4a"),
             true,
+            &mut |_| {},
         )
         .unwrap_err();
         assert_eq!(err.to_string(), "結合する音声区間がありません");

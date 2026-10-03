@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use tauri::ipc::Channel;
 use tauri::State;
 
 use crate::audio::concat::{concat_audio, FfmpegTools};
@@ -7,7 +8,8 @@ use crate::audio::{AudioSegment, ConcatResult};
 use crate::state::AppState;
 
 /// `segments` の音声と無音を結合して `out_path` に m4a で書き出し、各スライドの区間を返す。
-/// ffmpeg / ffprobe のパスは `AppState` の設定から取る。外部プロセスを待つため `spawn_blocking` で実行する
+/// ffmpeg / ffprobe のパスは `AppState` の設定から取る。外部プロセスを待つため `spawn_blocking` で実行する。
+/// 進捗（0〜1）は `on_progress` へ送る
 #[tauri::command]
 pub async fn run_ffmpeg_concat(
     state: State<'_, AppState>,
@@ -16,6 +18,7 @@ pub async fn run_ffmpeg_concat(
     segments: Vec<AudioSegment>,
     out_path: String,
     reencode_on_mismatch: bool,
+    on_progress: Channel<f64>,
 ) -> Result<ConcatResult, String> {
     let settings = state.settings().map_err(|e| e.to_string())?;
     let input = PathBuf::from(input_path);
@@ -25,6 +28,10 @@ pub async fn run_ffmpeg_concat(
             ffmpeg: &settings.ffmpeg_path,
             ffprobe: &settings.ffprobe_path,
         };
+        // 送信の失敗（画面側が破棄済み等）は無視し、変換は続ける
+        let mut send = |ratio: f64| {
+            let _ = on_progress.send(ratio);
+        };
         concat_audio(
             &tools,
             &input,
@@ -32,6 +39,7 @@ pub async fn run_ffmpeg_concat(
             &segments,
             &out,
             reencode_on_mismatch,
+            &mut send,
         )
     })
     .await
