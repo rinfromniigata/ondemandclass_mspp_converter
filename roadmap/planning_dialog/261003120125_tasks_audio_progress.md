@@ -1,15 +1,16 @@
-# 実装タスク（tasks）: 初期実装＋デザインシステム＋リリース
+# 実装タスク（tasks）: 初期実装＋デザインシステム＋音声結合の進捗表示＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
-- 実装設計: `roadmap/planning_dialog/261002133708_imple_sample_formats_and_release.md`
-- 検証手順: `roadmap/planning_dialog/261002133710_walk_sample_formats_and_release.md`
-- 前版: `roadmap/archived/261001133406_tasks_design_system_integration.md`（IDとチェック状態を引き継ぎ）
-- 変更理由: `roadmap/development/261002133633_change_sample_formats_and_release.md`（前回: `261001132402_change_design_system.md`）
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
+- 実装設計: `roadmap/planning_dialog/261003120124_imple_audio_progress.md`
+- 検証手順: `roadmap/planning_dialog/261003120126_walk_audio_progress.md`
+- 前版: `roadmap/archived/261002133709_tasks_sample_formats_and_release.md`（IDとチェック状態を引き継ぎ）
+- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
 
 各Phaseの完了後、対応するwalkのPhaseで検証してから次のPhaseへ進む。
 （グローバルルール改訂 261002121815 の「Phaseの同期・アジャイル化」は、ユーザーの指示により本プロジェクトでは適用しない。既存のIDとスケジュールを維持する）
 v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
-今回の変更で内容を変えた項目は T1-8・T6-2・T6-3、追加した項目は T7-1〜T7-4。
+261002の変更で内容を変えた項目は T1-8・T6-2・T6-3、追加した項目は旧 T7-1〜T7-4（現 T8-1〜T8-4）。
+v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準備は T7-1〜T7-4 から T8-1〜T8-4 へ移動した（旧IDは欠番）。
 実ファイル（pptx/ppsx）を前提にする確認は、必ず両方の形式で行う（imple 6.4）。
 
 ---
@@ -471,18 +472,46 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
       - 同じフォルダに実環境の `app.settings.json` を置く: エラー表示なしでドロップ待ちの画面になる
     - リリースビルドでの実ファイルの変換は W6-12（【ユーザー】）で確認する
 
-## Phase 7: リリース準備
-- [ ] T7-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
-  - 依存: T6-4
-  - imple 9章
-- [ ] T7-2 【エージェント】`.github/workflows/release.yml` を作成する（`v*` タグで起動、tauri-actionで Windows x64 と macOS Universal をビルド、GitHub Releases にドラフトを作成）
+## Phase 7: 音声結合の進捗表示
+- T7-1〜T7-4 → Phase 8 の T8-1〜T8-4 へ移動（リリース準備を最終Phaseに保つため。`261003115642_change_audio_progress.md`）
+- [x] T7-5 【エージェント】スペックシート v3 を作成する（Progress Indicator の確定型、`run_ffmpeg_concat` の進捗通知、`PipelineState.progress` ほか）
+  - 実施メモ（261003）: 仕様変更の承認後の手順として作成。`specs/ondemandclass_mspp_converter_SPEC_v3.md`。v2 は `archived/` へ移動。デザインアセット（`assets/design/`）は変更なし
+- [ ] T7-6 【エージェント】`process.rs` に `run_with_timeout_streaming`（stdout を行ごとにコールバックへ渡す）を追加し、`run_with_timeout` をその上に作り直す。単体テストを追加する
+  - 依存: T2-1, T7-5
+  - imple 3.3。既存の process の単体テストがそのまま通ること
+- [ ] T7-7 【エージェント】`audio/progress.rs`（`ProgressReporter`・`Span`・`parse_out_time_sec`）を実装し、単体テストを書く
+  - 依存: T7-5
+  - imple 3.6 progress.rs。配分の定数は初期値で置き、T7-8 で見直す
+- [ ] T7-8 【エージェント】`concat_audio` に進捗通知を組み込み（最終結合は `-progress pipe:1 -nostats` と `run_with_timeout_streaming`）、`run_ffmpeg_concat` に `Channel<f64>` 引数を追加する。結合テスト（`#[ignore]`）に進捗の記録と確認を加える
+  - 依存: T4-3, T4-4, T7-6, T7-7
+  - `Channel` の API はインストール済みの tauri 2.12.1 で確認する
+  - 実サンプル（`samples/derived/pptx/original.pptx` と `format_mismatch.pptx`）で、copy・再エンコードそれぞれの段階ごとの所要時間を測り、配分の定数を決めて実施メモに残す。計測用の一時テストは確認後に削除する
+- [ ] T7-9 【エージェント】TypeScript側を変更する（`tauriCommands.ts` の `runFfmpegConcat`、`AudioConcatStep`、`PipelineCallbacks.onStepProgress` と Orchestrator、`PipelineState.progress` と Controller）。Vitest の単体テストを追加・更新する
+  - 依存: T5-6, T7-8
+  - imple 4.1・4.3・4.5・4.6・6.2
+- [ ] T7-10 【エージェント】`ProgressIndicator`（確定型 `value`）・`ListItem`（`progress`）・`StepLog`・`ProcessingView` を変更し、`/dev/ui` に確定型（0%・42%・100%）、`/dev/screens` に音声結合の進捗中の processing 画面の見本を追加する
+  - 依存: T5-9, T7-9
+  - imple 5.3・5.4。色・寸法はトークン経由のみ
+- [ ] T7-11 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
+  - 依存: T7-10
+  - `bun run check`・`bun run test`・`cargo test`・`cargo test -- --ignored`（ffmpeg の環境変数つき）
+
+## Phase 8: リリース準備
+- [ ] T8-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
+  - 依存: T6-4, T7-11
+  - imple 9章。音声結合の進捗表示も 0.1.0 の内容に含める
+  - 旧ID: T7-1
+- [ ] T8-2 【エージェント】`.github/workflows/release.yml` を作成する（`v*` タグで起動、tauri-actionで Windows x64 と macOS Universal をビルド、GitHub Releases にドラフトを作成）
   - 依存: T1-10, T6-4
   - tauri-action の版・入力名・権限は作成時点の公式ドキュメントで確認する
   - アイコンはリポジトリの `src-tauri/icons/` を使い、CIでは生成しない
-- [ ] T7-3 【エージェント】リリース前の確認を行い、コミットメッセージとタグ作成・pushのコマンドを提示して停止する
-  - 依存: T7-1, T7-2
+  - 旧ID: T7-2
+- [ ] T8-3 【エージェント】リリース前の確認を行い、コミットメッセージとタグ作成・pushのコマンドを提示して停止する
+  - 依存: T8-1, T8-2
   - ローカルの `bun run tauri build` が成功すること
   - `src-tauri/icons/` 一式が `assets/design/` のマスターSVG（最新版）から生成されたものであること（再生成して差分がないこと等で確認する）
-- [ ] T7-4 【ユーザー】コミット・タグ作成・pushを行う
-  - 依存: T7-3
-  - ドラフトリリースの公開は W7-2・W7-3 の確認後にユーザーが行う
+  - 旧ID: T7-3
+- [ ] T8-4 【ユーザー】コミット・タグ作成・pushを行う
+  - 依存: T8-3
+  - ドラフトリリースの公開は W8-2・W8-3 の確認後にユーザーが行う
+  - 旧ID: T7-4

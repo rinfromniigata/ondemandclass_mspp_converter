@@ -1,4 +1,4 @@
-# オンデマンドスライドコンバーター 仕様書 v2
+# オンデマンドスライドコンバーター 仕様書 v3
 ### （Tauri / Bun / TypeScript / SvelteKit 版）
 
 対象読者：このツールを実装するエンジニア（Claude Code含む）
@@ -12,6 +12,9 @@
 - v2：デザインシステム（3章）を追加。これに伴い上書き確認のアプリ内ダイアログ化、
   実行中ステップの状態化、警告のBanner表示化等を反映
   （`roadmap/development/261001132402_change_design_system.md`）
+- v3：音声結合ステップのみ、処理中にプログレスバーと割合（%）を表示する。全体の進捗は表示しない。
+  Progress Indicator に確定型（Linear）を追加し、`run_ffmpeg_concat` に進捗通知を追加
+  （`roadmap/development/261003115642_change_audio_progress.md`）
 
 ---
 
@@ -260,11 +263,16 @@ M3の elevation（6段階）・shape（7段階）は本アプリの規模に対�
      警告の詳細はBannerで表示する
 
 4. **Progress Indicator**
-   - M3対応：Circular Progress Indicator（不定形。処理時間が予測
-     できないため）
-   - 色：`--color-primary`
-   - `ExtractPptxStep`実行中はWizard全体に1つ、`AudioConcatStep`/
-     `SlidePdfStep`は並行実行を視覚化するため各ログ行に個別表示する
+   - 不定形と確定型の2種を持つ
+     - 不定形：M3対応 Circular Progress Indicator（不定形）。進捗を取れない、または短時間で終わるステップに使う
+     - 確定型：M3対応 Linear Progress Indicator（確定型）。バーの右に割合（「42%」）をテキストで併記する。
+       **`AudioConcatStep` の処理中のログ行だけで使う**（比較的時間がかかり、進捗を実測できるため）
+   - 色：`--color-primary`（トラックは同色を薄く混合）
+   - `ExtractPptxStep`実行中はWizard全体に不定形を1つ、`AudioConcatStep`（確定型）/
+     `SlidePdfStep`（不定形）は並行実行を視覚化するため各ログ行に個別表示する
+   - パイプライン全体の進捗は表示しない。表示するのは1ステップ内の割合だけとし、
+     「1/4」「区間3/12」のような段階・件数は出さない（ブランド方向性）
+   - `prefers-reduced-motion: reduce` 環境では、確定型のバーの伸びのアニメーションをなくし、値の更新だけを表示する
 
 5. **Dialog**
    - M3対応：Basic Dialog
@@ -294,7 +302,7 @@ M3の elevation（6段階）・shape（7段階）は本アプリの規模に対�
 **確定事項**
 - `tokens.css` の値そのもの
 - elevation 3段階・shape 4段階への簡略化方針そのもの
-- 上記7種の部品とM3対応・状態・色の役割対応
+- 上記7種の部品とM3対応・状態・色の役割対応（Progress Indicator の確定型はv3で追加）
 - クリック可能領域40×40px、フォーカスリング2px、コントラスト比
   4.5:1以上という数値基準
 
@@ -438,7 +446,8 @@ export interface ActionStep<TInput, TOutput> {
 // パイプライン全体の状態。Wizard.svelte はこれだけを見て表示を切り替える
 export type PipelineState =
   | { view: "idle"; notice?: string }  // notice: 直前の受付拒否理由（拡張子不正・複数ファイル等）
-  | { view: "processing"; inputPath: string; running: string[]; results: StepResult[] } // running: 実行中ステップの name
+  | { view: "processing"; inputPath: string; running: string[]; results: StepResult[]; progress: Record<string, number> }
+  // running: 実行中ステップの name。progress: ステップ名 → 0〜1（進捗を通知するステップのみ。v3では音声結合だけ）
   | { view: "done"; inputPath: string; results: StepResult[]; outputs: { audio: string; pdf: string; json: string } }
   | { view: "error"; inputPath: string; results: StepResult[]; outputs: Partial<{ audio: string; pdf: string; json: string }>; failedSteps: string[] };
 ```
@@ -518,7 +527,7 @@ Rust側の構造体はフロントの型と一致させるため `#[serde(rename
 - エラー：zipとして開けない、`presentation.xml` が存在しない、
   スライド順序が解決できない場合に `Err(String)`
 
-### `run_ffmpeg_concat(input_path: String, slide_indices: Vec<u32>, segments: Vec<AudioSegment>, out_path: String, reencode_on_mismatch: bool) -> Result<ConcatResult, String>`
+### `run_ffmpeg_concat(input_path: String, slide_indices: Vec<u32>, segments: Vec<AudioSegment>, out_path: String, reencode_on_mismatch: bool, on_progress: Channel<f64>) -> Result<ConcatResult, String>`
 - 責務：
   1. `tempfile::TempDir` を作成し、`segments` 中の `media` 区間の音声を
      入力pptxから一時ディレクトリへ取り出す（コマンド終了時にDropで自動削除）
@@ -536,6 +545,12 @@ Rust側の構造体はフロントの型と一致させるため `#[serde(rename
      `SlideTimestampEntry` を計算する。区間を持たないスライド（skip時の無音スライド）は
      その時点の累積値で `startSec = endSec` とする
   8. 出力は `-movflags +faststart` を付けて `out_path` に書き出す
+  9. **進捗を `on_progress`（`tauri::ipc::Channel<f64>`）で 0〜1 の割合として通知する**
+     - 「準備」（区間ごとの取り出し・ffprobe・無音生成・WAV正規化）は区間を1つ終えるごとに、
+       「結合」（最後のffmpeg）は `-progress pipe:1` の `out_time_us` ÷ 総尺で進める。2段階の配分はimpleで定める
+     - 割合は単調に増やす（copy結合の失敗から再エンコードで再試行する場合も戻さない）。
+       1%以上変わったときだけ通知し、正常終了の直前に 1 を通知する
+     - ドメイン層はTauriに依存させず、進捗はコールバックで受け取る。Channelへの変換はコマンド層で行う
 - 出力：`{ timestamps: SlideTimestampEntry[], reencoded: boolean }`
 - エラー：ffmpeg/ffprobeが起動できない、結合処理が再エンコードでも失敗する、
   タイムアウト（1プロセスあたり300秒）の場合に `Err(String)`
@@ -587,6 +602,8 @@ Rust側の構造体はフロントの型と一致させるため `#[serde(rename
   `success: false`（「音声を含むスライドがありません」）を返す
 - `run_ffmpeg_concat` を呼び、`timestamps` を `TimestampJsonStep` に渡すデータとして返す。
   再エンコードした場合はその旨を `warnings` に載せる
+- 入力の `onProgress?: (ratio: number) => void` を、`run_ffmpeg_concat` の進捗通知
+  （`tauriCommands.ts` 内で作る `Channel`）につなぐ
 - 出力ファイルは `OutputPaths.audio`
 
 ### `src/lib/steps/slidePdfStep.ts`
@@ -615,13 +632,14 @@ Rust側の構造体はフロントの型と一致させるため `#[serde(rename
 export interface PipelineCallbacks {
   onStart: (stepName: string) => void;     // ステップ開始時（Progress Indicator表示用）
   onProgress: (r: StepResult) => void;     // ステップ完了時（成功・失敗とも）
+  onStepProgress: (stepName: string, ratio: number) => void; // ステップ内の進捗（0〜1。v3では音声結合のみ）
 }
 
 export class PipelineOrchestrator {
   // 各Stepはコンストラクタで注入する（テスト時にモックへ差し替えるため）
   constructor(private readonly steps: {
     extract: ActionStep<{ inputPath: string }, SlideAudioMap>;
-    audio: ActionStep<{ inputPath: string; slideAudioMap: SlideAudioMap; outPath: string }, { timestamps: SlideTimestampEntry[] }>;
+    audio: ActionStep<{ inputPath: string; slideAudioMap: SlideAudioMap; outPath: string; onProgress?: (ratio: number) => void }, { timestamps: SlideTimestampEntry[] }>;
     pdf: ActionStep<{ inputPath: string; outPath: string }, string>;
     json: ActionStep<{ timestamps: SlideTimestampEntry[]; outPath: string }, string>;
   }) {}
@@ -635,7 +653,8 @@ export class PipelineOrchestrator {
     // 並列実行し、到着順に onProgress へ通知する
     cb.onStart(this.steps.audio.name);
     cb.onStart(this.steps.pdf.name);
-    const audioPromise = this.steps.audio.execute({ inputPath, slideAudioMap: extractResult.data!, outPath: outputs.audio })
+    const audioPromise = this.steps.audio.execute({ inputPath, slideAudioMap: extractResult.data!, outPath: outputs.audio,
+        onProgress: (ratio) => cb.onStepProgress(this.steps.audio.name, ratio) })
       .then((r) => { cb.onProgress(r); return r; });
     const pdfPromise = this.steps.pdf.execute({ inputPath, outPath: outputs.pdf })
       .then((r) => { cb.onProgress(r); return r; });
@@ -663,9 +682,10 @@ export interface RunSummary {
      `{ view: "idle", notice }` にして終了
   3. `resolveOutputPaths` で出力パスを決め、`check_outputs_exist` で既存ファイルを確認する。
      1つでもあれば `confirmDialog`（既存ファイル名を列挙）で確認し、キャンセルなら idle に戻す
-  4. `{ view: "processing", inputPath, running: [], results: [] }` にし、
+  4. `{ view: "processing", inputPath, running: [], results: [], progress: {} }` にし、
      `PipelineOrchestrator.run()` を実行する。`onStart` で `running` に追加、
-     `onProgress` で `running` から除いて `results` に追記する
+     `onStepProgress` で `progress[stepName]` を更新、
+     `onProgress` で `running` と `progress` から除いて `results` に追記する
   5. `RunSummary` から `done` / `error` へ遷移する
 - 処理中（`processing`）のドロップは無視する
 - 確認処理は依存として注入する（テストでモックに差し替えるため）
@@ -713,8 +733,11 @@ export const pipelineState = writable<PipelineState>({ view: "idle" });
 - `running` と `results` を List item のログとして表示する
   （完了＝成功アイコン、完了（警告あり）＝成功アイコン＋ラベル、失敗＝エラーアイコン、処理中＝Progress Indicator。
   いずれもテキストラベルを併記）
-- `ExtractPptxStep` 実行中は画面全体に Progress Indicator を1つ表示する。
+- `ExtractPptxStep` 実行中は画面全体に Progress Indicator（不定形）を1つ表示する。
   `AudioConcatStep` と `SlidePdfStep` は各ログ行に個別に表示する
+- `AudioConcatStep` の行は `progress` の値で確定型（バー＋割合）を表示する。
+  最初の通知が届くまでは 0% と表示する。ほかの行は不定形のまま
+- パイプライン全体の進捗（全体バー・全体の割合）は表示しない
 - 並行実行される2ステップは到着順にログへ積む（順序は固定しない）
 - 「1/4」のような段階表示は行わない（3章ブランド方向性）
 

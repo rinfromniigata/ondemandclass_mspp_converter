@@ -1,15 +1,16 @@
-# 検証手順（walk）: 初期実装＋デザインシステム＋リリース
+# 検証手順（walk）: 初期実装＋デザインシステム＋音声結合の進捗表示＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
-- 実装タスク: `roadmap/planning_dialog/261002133709_tasks_sample_formats_and_release.md`
-- 前版: `roadmap/archived/261001133444_walk_design_system_integration.md`（IDとチェック状態を引き継ぎ）
-- 変更理由: `roadmap/development/261002133633_change_sample_formats_and_release.md`（前回: `261001132402_change_design_system.md`）
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
+- 実装タスク: `roadmap/planning_dialog/261003120125_tasks_audio_progress.md`
+- 前版: `roadmap/archived/261002133710_walk_sample_formats_and_release.md`（IDとチェック状態を引き継ぎ）
+- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
 
 tasksの各Phaseが終わったら、同じ番号のPhaseを検証する。
 （グローバルルール改訂 261002121815 の「Phaseの同期・アジャイル化」は、ユーザーの指示により本プロジェクトでは適用しない）
 Phase 5・6はスペック13章の受け入れ基準の確認を兼ねる。
 v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
-今回の変更で内容を変えた項目は W3-2・W4-3・W6-1〜W6-10・W6-12、追加した項目は W7-1〜W7-3。
+261002の変更で内容を変えた項目は W3-2・W4-3・W6-1〜W6-10・W6-12、追加した項目は旧 W7-1〜W7-3（現 W8-1〜W8-3）。
+v3（261003の変更）で追加した項目は W7-4〜W7-10。リリース準備の検証は W7-1〜W7-3 から W8-1〜W8-3 へ移動した（旧IDは欠番）。
 **実ファイル（pptx/ppsx）を前提にする検証は、必ず両方の形式で行う。** 実ファイルの構成は imple 6.4（前編は pptx・ppsx の両方、後編は ppsx のみ。派生サンプルは `samples/derived/pptx/` と `samples/derived/ppsx/`）。
 
 ---
@@ -30,7 +31,7 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
     - `git ls-files` で、4つのパス配下に追跡済みファイルが0件であることも確認（過去に誤ってコミットされていない）
 - [x] W1-4 【ユーザー】ウィンドウのタイトルバーとタスクバーに、アイコン原本から生成したアプリアイコンが表示されることを確認する
   - 依存: T1-10
-  - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方は W7-3 で確認する（261002 の変更で追加）
+  - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方は W8-3（旧 W7-3）で確認する（261002 の変更で追加）
 
 ## Phase 2: Rust基盤の検証
 - [x] W2-1 【エージェント】`cargo test` で process・settings の単体テストがすべて通ることを確認する
@@ -167,11 +168,34 @@ v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
   - W6-1 の成果物が残っている場合は、上書き確認で「上書きする」を選んでよい
 - [ ] W6-13 【エージェント】コードを検索し、コンポーネント内で色・影・角丸・余白が直接の値（`#xxxxxx`、`rgba(...)`、`px` の角丸・影等）で書かれておらず、`tokens.css` のトークン経由になっていることを確認する。また `src/lib/styles/tokens.css` の値が原本と一致することを差分で確認する
 
-## Phase 7: リリース準備の検証
-- [ ] W7-1 【エージェント】`.github/workflows/release.yml` を確認し、`v*` タグで起動すること、Windows x64 と macOS Universal のビルドがあること、ドラフトで作成すること、アイコンを生成する手順がないことを実施メモに記録する
-  - 依存: T7-2
-- [ ] W7-2 【ユーザー】タグのpush後、GitHub Actions が成功し、ドラフトリリースに Windows x64 と macOS Universal の成果物が付いていることを確認する
-  - 依存: T7-4
-- [ ] W7-3 【ユーザー】ドラフトリリースの macOS 版を macOS で開き、Dock・Finder でアプリアイコンが判別できることを確認する（Windows は W1-4 で確認済み）
-  - 依存: T7-4
+## Phase 7: 音声結合の進捗表示の検証
+- W7-1〜W7-3 → Phase 8 の W8-1〜W8-3 へ移動（`261003115642_change_audio_progress.md`）
+- [ ] W7-4 【エージェント】`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
+  - 依存: T7-6, T7-7, T7-9, T7-10
+  - process（`run_with_timeout_streaming`）・progress の単体テスト、TypeScript の進捗関連テスト（imple 6.1・6.2）の件数を実施メモに残す
+- [ ] W7-5 【エージェント】`cargo test -- --ignored`（ffmpeg の環境変数つき）で、結合テストの全ケースが通り、通知された割合が 0〜1 に収まって単調に増え、成功時は最後が 1、失敗時は 1 が送られないことを確認する
+  - 依存: T7-8
+  - copy・再エンコード・copy失敗からの再試行の各方式を含める
+- [ ] W7-6 【ユーザー】`bun run tauri dev` で `samples/derived/pptx/original.pptx` と `samples/derived/ppsx/original.ppsx` をそれぞれドロップし、音声結合の行だけにバーと割合（%）が表示され、0% から 100% へ戻らずに進むこと、PDF変換の行は今までどおり回転表示であること、全体の進捗や「1/4」のような段階表示がないことを確認する
+  - 依存: T7-10
+  - 成果物が残っている場合は、上書き確認で「上書きする」を選んでよい
+- [ ] W7-7 【ユーザー】音声形式不一致版（`format_mismatch`）を pptx・ppsx の両方でドロップし、再エンコードでも割合が戻らずに 100% まで進み、完了後は今までどおり再エンコードの警告が出ることを確認する
+  - 依存: T7-10
+- [ ] W7-8 【ユーザー】Windowsの設定で「アニメーション効果」をオフにして W7-6 と同じ操作をし、バーが伸びる動きなしで値だけ更新され、割合のテキストで進み具合が分かることを確認する
+  - 依存: W7-6
+- [ ] W7-9 【エージェント】変更・追加したコンポーネント（`ProgressIndicator`・`ListItem`・`StepLog`・`ProcessingView`）に、色・影・角丸・余白の直接の値がなく、トークン経由になっていることを確認する。確定型の割合テキストの色×背景色のコントラストが既存の組み合わせ（`bun scripts/contrast-check.ts`）に含まれていることも確認する
+  - 依存: T7-10
+- [ ] W7-10 【ユーザー】T7-11 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で音声結合の進捗表示が W7-6 と同じように出て、3ファイルが生成されることを確認する
+  - 依存: T7-11
+
+## Phase 8: リリース準備の検証
+- [ ] W8-1 【エージェント】`.github/workflows/release.yml` を確認し、`v*` タグで起動すること、Windows x64 と macOS Universal のビルドがあること、ドラフトで作成すること、アイコンを生成する手順がないことを実施メモに記録する
+  - 依存: T8-2
+  - 旧ID: W7-1
+- [ ] W8-2 【ユーザー】タグのpush後、GitHub Actions が成功し、ドラフトリリースに Windows x64 と macOS Universal の成果物が付いていることを確認する
+  - 依存: T8-4
+  - 旧ID: W7-2
+- [ ] W8-3 【ユーザー】ドラフトリリースの macOS 版を macOS で開き、Dock・Finder でアプリアイコンが判別できることを確認する（Windows は W1-4 で確認済み）
+  - 依存: T8-4
   - macOS 上での変換動作は確認の対象外（imple 9章）
+  - 旧ID: W7-3

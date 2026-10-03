@@ -1,7 +1,11 @@
 # 仕様変更サマリー（change）: 音声結合ステップの進捗表示（プログレスバーと割合）
 
-- 状態: **承認待ち**
-- 反映先: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`（新版）、新タイムスタンプの imple・tasks・walk
+- 状態: **承認済み**（261003、チャットでの承認）
+- 反映先: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`（新版）、`roadmap/planning_dialog/261003120124_imple_audio_progress.md`・`261003120125_tasks_audio_progress.md`・`261003120126_walk_audio_progress.md`
+- 反映時の補足（imple作成時に詰めた点）
+  - 音声結合の行を最初から 0% で表示するため、Orchestrator が開始直後に 0 を通知する（画面側はステップ名で分岐しない）
+  - 処理中の音声結合の行は、回転表示を出さずバー1つだけを動かす（leading 欄は空）
+  - Phase 7 の末尾に T7-11（リリースビルドの作り直し）と W7-10（リリースビルドでの表示確認）を追加した。T8-1 は T7-11 に依存する
 - デザインアセット（`assets/design/` の tokens・brand・アイコン原本）: **変更なし**
 
 ---

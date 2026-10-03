@@ -1,11 +1,11 @@
-# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム＋リリース
+# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム＋音声結合の進捗表示＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v2.md`
-- 対応tasks: `roadmap/planning_dialog/261002133709_tasks_sample_formats_and_release.md`
-- 対応walk: `roadmap/planning_dialog/261002133710_walk_sample_formats_and_release.md`
-- 前版: `roadmap/archived/261001133221_imple_design_system_integration.md`
-- 変更理由: `roadmap/development/261002133633_change_sample_formats_and_release.md`（前回: `261001132402_change_design_system.md`）
-- 前版からの変更: 6.4（手動検証用サンプル）と9章（リリース）を追加
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
+- 対応tasks: `roadmap/planning_dialog/261003120125_tasks_audio_progress.md`
+- 対応walk: `roadmap/planning_dialog/261003120126_walk_audio_progress.md`
+- 前版: `roadmap/archived/261002133708_imple_sample_formats_and_release.md`
+- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
+- 前版からの変更: 音声結合の進捗通知と表示を追加（2章・3.1・3.3・3.6・3.7.1・4.1・4.3・4.5・4.6・5.3・5.4・6.1・6.2）
 
 本書はスペックシートの3章・6〜8章を実装単位に分解し、モジュールの責務・インターフェース・
 内部処理の方針を定める。スペックと食い違う場合はスペックを正とし、本書を修正する。
@@ -32,6 +32,7 @@
    - 無音スライドの扱い → `buildSegments` のみ
    - 結合方式の判定 → `audio/plan.rs` のみ
    - タイムスタンプ計算 → `audio/timeline.rs` のみ
+   - 音声結合の進捗の配分・通知間引き → `audio/progress.rs` のみ
    - 見た目の値 → `tokens.css`（変更禁止）と `base.css`・各基本部品のみ
 
 ---
@@ -58,10 +59,14 @@ sequenceDiagram
     U-->>D: 選択
     D-->>C: true / false
   end
-  C->>O: run(inputPath, outputs, { onStart, onProgress })
+  C->>O: run(inputPath, outputs, { onStart, onProgress, onStepProgress })
   O->>R: extract_pptx
   par 並行実行
-    O->>R: run_ffmpeg_concat
+    O->>R: run_ffmpeg_concat（Channel を渡す）
+    loop 処理中
+      R-->>O: 進捗 0〜1（Channel）
+      O-->>C: onStepProgress("音声結合", ratio)
+    end
   and
     O->>R: run_soffice_convert
   end
@@ -82,7 +87,7 @@ src-tauri/src/
 ├─ lib.rs                  # Builder: plugin(opener), manage(AppState), invoke_handler
 ├─ state.rs                # AppState { settings: Mutex<Option<AppSettings>> }
 ├─ error.rs                # AppError（Display実装で日本語文言を作る）
-├─ process.rs              # run_with_timeout
+├─ process.rs              # run_with_timeout, run_with_timeout_streaming
 ├─ commands/
 │  ├─ mod.rs
 │  ├─ settings.rs          # load_and_validate_settings
@@ -105,6 +110,7 @@ src-tauri/src/
 │  ├─ probe.rs             # ffprobe 実行とJSON解析
 │  ├─ plan.rs              # 結合方式判定（純粋関数）
 │  ├─ timeline.rs          # タイムスタンプ計算（純粋関数）
+│  ├─ progress.rs          # 進捗の配分・単調化・間引き、-progress 出力の解釈（純粋ロジック）
 │  └─ concat.rs            # 一時dir・メディア取り出し・無音生成・ffmpeg結合
 └─ pdf/
    └─ mod.rs               # convert_to_pdf（soffice実行・移動）
@@ -169,6 +175,19 @@ pub fn run_with_timeout(cmd: Command, timeout: Duration) -> Result<ProcessOutput
 - Windowsでは `CommandExt::creation_flags(0x08000000)`（CREATE_NO_WINDOW）を付ける
 - 起動失敗（`NotFound` 等）は「<実行ファイルパス> を起動できません」に変換する
 - エラー文言には stderr の末尾（最大20行）を含める
+
+```rust
+pub fn run_with_timeout_streaming(
+    cmd: Command,
+    timeout: Duration,
+    on_stdout_line: &mut dyn FnMut(&str),
+) -> Result<ProcessOutput, AppError>;
+```
+- 進捗表示用（v3）。stdout の読み取りスレッドが1行読むごとに mpsc で本体へ送り、本体はポーリングの合間に
+  受け取った行を `on_stdout_line` に渡す（コールバックは呼び出し元のスレッドで実行する。スレッドをまたがせない）
+- 受け取った行は従来どおり `ProcessOutput.stdout` にも蓄える
+- タイムアウト・kill・子孫プロセスの終了・パイプの読み切り猶予は `run_with_timeout` と共通の実装にする。
+  `run_with_timeout` は何もしないコールバックで `run_with_timeout_streaming` を呼ぶ形に置き換え、既存の単体テストをそのまま通す
 
 ### 3.4 `settings/`
 
@@ -254,6 +273,43 @@ pub fn build_timeline(slide_indices: &[u32], segment_durations: &[(u32, f64)]) -
 - 累積しながら各スライドの最初の区間開始〜最後の区間終了を記録。
   区間を持たないスライドはその時点の累積値で start=end
 
+#### progress.rs（v3。Tauri・外部プロセスに依存しない）
+```rust
+/// 0〜1 の割合を受け取る通知先。コマンド層で Channel への送信に変換する
+pub type ProgressSink<'a> = &'a mut dyn FnMut(f64);
+
+/// 単調化と間引きを行う通知器
+pub struct ProgressReporter<'a> { sink: ProgressSink<'a>, sent: f64 }
+impl ProgressReporter<'_> {
+    pub fn new(sink: ProgressSink<'_>) -> ProgressReporter<'_>;
+    /// ratio を 0〜1 に丸め、送信済みの値以下なら無視、送信済み +0.01 未満なら送らない（1.0 は必ず送る）
+    pub fn report(&mut self, ratio: f64);
+    pub fn current(&self) -> f64; // 送信済みの値（再試行時の起点に使う）
+}
+
+/// 全体 [start, end] の中の1段階分の範囲
+#[derive(Clone, Copy)]
+pub struct Span { pub start: f64, pub end: f64 }
+impl Span {
+    /// 範囲内の割合 t（0〜1）を全体の割合に変換する
+    pub fn at(self, t: f64) -> f64;
+    /// 範囲を weights の比で分割する
+    pub fn split<const N: usize>(self, weights: [f64; N]) -> [Span; N];
+}
+
+/// `-progress` の1行から出力済みの秒数を取り出す（`out_time_us=123456` → Some(0.123456)。`N/A` 等は None）
+pub fn parse_out_time_sec(line: &str) -> Option<f64>;
+```
+- 段階と配分の初期値（T7-8 で実サンプルの所要時間を測って見直し、定数として `progress.rs` に置く）
+  - copy 方式: 取り出し（音声区間の書き出し＋ffprobe）`0.2`／区間生成（無音区間の生成）`0.1`／結合 `0.7`
+  - 再エンコード方式: 取り出し `0.1`／区間生成（各区間のWAV正規化＋ffprobe）`0.5`／結合 `0.4`
+  - 結合方式は取り出しの後に決まるため、取り出しは両方式で共通の配分（`0.2` とし、再エンコード時は残りを比で配る）にしてよい。最終値は T7-8 の実施メモに残す
+- 段階内の進め方
+  - 取り出し・区間生成: 対象の区間を1つ終えるごとに `完了数 ÷ 対象数` で進める（対象が0件なら段階の終わりまで進める）
+  - 結合: `run_with_timeout_streaming` で ffmpeg に `-progress pipe:1 -nostats` を付け、`out_time_us ÷ 総尺`（取り出し・区間生成で求めた各区間の長さの合計）で進める
+- copy 結合が失敗して再エンコードで再試行する場合: その時点の `reporter.current()` から 1 までを新しい全体範囲として、再エンコード方式の「区間生成・結合」の比で分け直す（割合を戻さない）
+- 正常終了で出力を `out_path` へ移した後に `report(1.0)` を呼ぶ。エラー時は 1 を送らない
+
 #### concat.rs
 - 手順：
   1. `TempDir::new()`（関数スコープで保持。return / `?` / panic いずれでもDropで削除）
@@ -271,6 +327,10 @@ pub fn build_timeline(slide_indices: &[u32], segment_durations: &[(u32, f64)]) -
      一時dirに一度書くのは、途中失敗時に既存の出力ファイルを壊さないため
   9. `build_timeline` で `ConcatResult` を作る（Copy時は元パートの duration、無音は指定秒）
 - 各ffmpeg/ffprobeプロセスのタイムアウトは300秒
+- 進捗（v3）: `concat_audio` の最後の引数に `on_progress: ProgressSink<'_>` を追加し、関数内で `ProgressReporter` を作る。
+  手順2（取り出し）・4/7（区間生成）・6/7の最終結合（結合）で、`progress.rs` の配分どおりに `report` する。
+  最終結合だけ `run_with_timeout_streaming` を使い、それ以外の ffmpeg/ffprobe の呼び出しは従来どおり `run_with_timeout`
+- 既存の呼び出し（結合テスト等）は、何もしないコールバック `&mut |_| {}` を渡して動作を変えない
 
 ### 3.7 `pdf/`
 
@@ -281,6 +341,13 @@ pub fn build_timeline(slide_indices: &[u32], segment_durations: &[(u32, f64)]) -
   3. タイムアウト120秒
   4. `<tmp>/<入力ファイル名のstem>.pdf` の存在を確認し、`out_path` へ移動
 - `profile_dir` はコマンド層で `app.path().app_local_data_dir()/lo_profile` を渡す
+
+### 3.7.1 `commands/audio_process.rs`（v3）
+
+- `run_ffmpeg_concat` に引数 `on_progress: tauri::ipc::Channel<f64>` を追加する（JS側の引数名は `onProgress`）
+- `spawn_blocking` のクロージャへ Channel を move し、`concat_audio` には `&mut |ratio| { let _ = on_progress.send(ratio); }` を渡す。
+  送信の失敗（画面側が破棄済み等）は無視し、変換は続ける
+- `Channel` の型・送信APIは、インストール済みの tauri 2.12.1 のドキュメントで確認してから使う
 
 ### 3.8 `commands/output_files.rs`
 
@@ -340,6 +407,9 @@ export const commands = {
 export type Commands = typeof commands;
 ```
 - Tauri v2 は Rust の snake_case 引数を JS 側 camelCase で渡す規約のため、それに合わせる
+- 進捗（v3）: `runFfmpegConcat(a, onProgress?: (ratio: number) => void)` とする。関数内で
+  `new Channel<number>()`（`@tauri-apps/api/core`）を作り、`onmessage` に `onProgress` をつないで `{ ...a, onProgress: channel }` で invoke する。
+  `onProgress` が省略されても Channel は渡す（Rust側の引数は必須のため）
 - `SettingsStatus` / `AppSettings` / `ConcatResult` の型もここで定義する
 
 ### 4.2 Step 実装方針
@@ -358,6 +428,8 @@ export function buildSegments(slides: SlideAudioEntry[], s: Pick<AppSettings, "s
   1. `slides.some(s => s.hasAudio)` が偽なら失敗（「音声を含むスライドがありません」）
   2. `buildSegments` → `runFfmpegConcat`
   3. `reencoded` なら警告「音声の形式がスライド間で異なるため再エンコードで結合しました」
+- 進捗（v3）: `AudioConcatInput` に `onProgress?: (ratio: number) => void` を追加し、`runFfmpegConcat` の第2引数へそのまま渡す。
+  Step 自身は割合を加工しない（単調化・間引きは Rust 側で済んでいる）
 
 ### 4.4 `outputPaths.ts`
 
@@ -376,6 +448,9 @@ export function buildSegments(slides: SlideAudioEntry[], s: Pick<AppSettings, "s
     失敗結果を `onProgress` に通知し、failedSteps に追加する
   - pdf 成功 → `outputs.pdf`、失敗 → failedSteps に追加
   - json 成功 → `outputs.json`、失敗 → failedSteps に追加
+- 進捗（v3）: `PipelineCallbacks` に `onStepProgress(stepName, ratio)` を追加する。音声結合の `execute` に
+  `onProgress: (ratio) => cb.onStepProgress(audio.name, ratio)` を渡す。ほかのステップには渡さない
+- `cb.onStart(audio.name)` の直後に `cb.onStepProgress(audio.name, 0)` を呼ぶ（最初の通知が届く前から確定型の 0% を出すため。どのステップを確定型にするかを Orchestrator だけが決める）
 
 ### 4.6 `pipelineController.ts`
 
@@ -390,7 +465,10 @@ export function createPipelineController(deps: {
 ```
 - 依存を注入できるファクトリにして単体テストする。既定のインスタンスを `pipelineController` として export
 - 同時実行防止：`get(store).view !== "idle"` なら即 return
-- `onStart(name)`：`running` に追加。`onProgress(r)`：`running` から `r.stepName` を除き、`results` に追加
+- `onStart(name)`：`running` に追加。`onProgress(r)`：`running` と `progress` から `r.stepName` を除き、`results` に追加
+- `onStepProgress(name, ratio)`（v3）：`view === "processing"` かつ `running` に `name` があるときだけ `progress[name] = ratio` にする
+  （完了通知の後に遅れて届いた進捗で行が復活しないようにするため）
+- `processing` へ遷移するときは `progress: {}` で初期化する
 - 状態遷移：スペック7章の手順1〜5
 
 ### 4.7 `confirmDialog.ts`
@@ -459,8 +537,18 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
 |---|---|---|
 | `Button` | `variant: "filled" \| "text"`, `disabled?`, `onclick`, `children` | `<button>` 要素。高さ40px、`min-width: 64px`、shape md、`.state-layer` |
 | `Card` | `elevation?: 0〜3`（既定1）, `dragged?: boolean`, `children` | shape lg、背景 `--color-surface` |
-| `ListItem` | `status: "running" \| "success" \| "warning" \| "error"`, `label`, `detail?` | leading にアイコンまたは ProgressIndicator。状態ラベル（処理中／完了／完了（警告あり）／失敗）を必ずテキストで出す |
-| `ProgressIndicator` | `size?: "sm" \| "lg"`, `label`（読み上げ用） | SVG円弧の回転。`role="progressbar"`、`aria-label`。reduced-motion 時は回転を止め、ラベル表示で代替 |
+| `ListItem` | `status: "running" \| "success" \| "warning" \| "error"`, `label`, `detail?`, `progress?: number`（v3） | leading にアイコンまたは ProgressIndicator。状態ラベル（処理中／完了／完了（警告あり）／失敗）を必ずテキストで出す。`status === "running"` で `progress` があれば、下記の確定型を使う |
+| `ProgressIndicator` | `size?: "sm" \| "lg"`, `label`（読み上げ用）, `value?: number`（v3、0〜1） | `value` なし＝不定形：SVG円弧の回転。`role="progressbar"`、`aria-label`。reduced-motion 時は回転を止め、ラベル表示で代替。`value` あり＝確定型：下記 |
+
+- **確定型（v3）**の詳細
+  - 横棒（トラック＋塗り）と、その右に割合のテキスト（`Math.floor(value * 100)` ＋「%」。`font-variant-numeric: tabular-nums` で桁幅を固定し、数字の変化で横に揺れないようにする）
+  - 塗りは `transform: scaleX(value)`（`transform-origin: left`）で伸ばし、`transition: transform var(--motion-duration-fast) var(--motion-easing-standard)`。
+    reduced-motion 時は base.css でトークンが0msになるため、値の更新だけになる
+  - 色は塗り `--color-primary`、トラックは不定形と同じ `color-mix(in srgb, currentColor 24%, transparent)`。バーの高さ・角丸・テキストとの間隔は既存の余白・角丸トークン（`--space-*`・`--radius-full`）から選ぶ
+  - `role="progressbar"`、`aria-valuemin="0"`、`aria-valuemax="100"`、`aria-valuenow`（整数%）、`aria-label`
+  - 幅は親要素いっぱいに広がる（`size` は使わない）
+- `ListItem` の確定型の配置：1行目に「ステップ名＋状態ラベル（処理中）」、2行目に確定型のバーと割合を置く。
+  leading 欄は列をそろえるため幅を保ったまま空にする（回転する表示は出さない。動くものはバー1つにする）
 | `Dialog` | `open`, `title`, `onclose`, `children`, `actions` | `<dialog>` 要素と `showModal()` を使い、フォーカスの閉じ込めと Esc をブラウザ標準の挙動に任せる。elevation 3、shape lg |
 | `Banner` | `tone: "error"`, `title?`, `items?: string[]`, `children`, `actions?` | 文字は `--color-text`、アイコンと左端4pxの帯が `--color-error`。`role="alert"`（idleの設定エラー）または `role="status"`（警告）を Props で切り替え |
 | `StatusChip` | `status: "done" \| "partial" \| "failed"` | ラベル「完了」「一部エラー」「失敗」、shape full。アイコンを併記 |
@@ -480,6 +568,10 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
 - `ProcessingView.svelte`
   - `running` に「pptx解析」が含まれる間は中央に ProgressIndicator（lg）を1つ
   - それ以降は `results` と `running` を ListItem で並べる（完了したものは到着順、実行中のものはその後ろ）
+  - v3: `StepLog` に `progress` を渡し、`StepLog` は実行中の行の `progress={progress[name]}` を ListItem に渡す。
+    値がないステップは `undefined` のまま（不定形）。画面側はステップ名で分岐しない
+    （音声結合の行が最初から確定型の 0% になるのは、Orchestrator が開始時に 0 を通知するため。4.5）
+  - 全体の進捗（全体バー・全体の割合）は置かない
 - `ResultView.svelte`
   - 先頭に StatusChip、続いて成果物一覧の Card（ファイル種別の小アイコン＋フルパス。等幅フォント `--font-family-mono`）
   - 警告・失敗は Banner。失敗ステップのメッセージは Banner 内で強調する
@@ -518,6 +610,11 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
   環境変数 `FFMPEG_PATH` / `FFPROBE_PATH` を読み、ffmpegで生成した音声
   （44.1kHz/48kHz、mono/stereo、AAC/MP3）をfixtureに埋め込んで実行する。
   実行は `cargo test -- --ignored`
+- 進捗（v3）
+  - `process.rs`: `run_with_timeout_streaming` が stdout を行ごとに順序どおり渡すこと、タイムアウト時も従来どおり kill されること
+  - `audio/progress.rs`: `parse_out_time_sec`（正常値・`N/A`・別キー）、`Span::at` / `split`、`ProgressReporter`（逆行の無視・1%未満の間引き・1.0 の必ず送信・範囲外の丸め）
+  - `concat_integration`（`#[ignore]`）: 既存ケースで通知を記録し、0〜1 に収まること・単調増加・最後が 1 であることを確認する
+    （copy・再エンコード・copy失敗からの再試行の各方式。エラーケースでは 1 が送られないこと）
 
 ### 6.2 TypeScript（Vitest）
 
@@ -529,6 +626,8 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
   - `orchestrator.test.ts`（モックStep。`onStart` / `onProgress` の呼び出し順と `RunSummary` の集計）
   - `pipelineController.test.ts`（モック依存。受付拒否、上書き確認のキャンセル／承諾、`running` と `results` の遷移、done / error の判定）
   - `confirmDialog.test.ts`（解決、置き換え時の前要求の `false` 解決）
+  - v3: `audioConcatStep.test.ts`（`onProgress` が `runFfmpegConcat` に渡ること）、`orchestrator.test.ts`（音声結合の進捗だけが `onStepProgress` に届くこと、開始直後に 0 が届くこと）、
+    `pipelineController.test.ts`（`progress` の更新、完了時の削除、完了後に遅れて届いた進捗の無視、processing 遷移時の初期化）
 - Svelteコンポーネントの描画テストは導入しない（見た目は walk の目視確認で行う）
 
 ### 6.3 コントラスト確認
