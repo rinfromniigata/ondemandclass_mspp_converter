@@ -423,9 +423,17 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - 実施メモ（参考：文字以外）: ライトでは7組すべて3:1未満（`--color-success` × surface 1.52:1、`--color-warning` 1.61:1、`--color-primary` 1.84:1、`--color-error` 2.49:1、Banner上の `--color-error` 2.25:1、`--color-primary-strong` × bg 2.55:1／× surface 2.72:1）。スペック3章で既知とされた値と一致する。状態はアイコンに加えて文字ラベルで示しており、フォーカスリングは実機で目視確認する方針（walk W5-4）のため、トークンも使い方も変えない。ダークでは7組すべて3:1以上
 
 ## Phase 6: 統合・仕上げ
-- [ ] T6-1 【エージェント】静的チェックと全テストを実行し、指摘をすべて解消する
+- [x] T6-1 【エージェント】静的チェックと全テストを実行し、指摘をすべて解消する
   - 依存: Phase 2〜5
   - `cargo fmt --check` / `cargo clippy` / `cargo test` / `cargo test -- --ignored` / `bun run check` / `bun run test` / `bun scripts/contrast-check.ts`
+  - 実施メモ（実行結果 261003092244）: すべて終了コード0で、指摘はなく修正は行っていない
+    - `cargo fmt --check`: 差分なし
+    - `cargo clippy --all-targets -- -D warnings`: 警告なし（`src/lib.rs` を touch して再チェックさせた）。W1-1で申し送りのあった `linker_messages` の警告はclippyでは出ず、`-D warnings` でも失敗しない
+    - `cargo test`: 単体120件・結合9件が成功（`concat_integration` の9件は ignored）
+    - `cargo test -- --ignored`: `concat_integration` の9件が成功。環境変数 `FFMPEG_PATH`・`FFPROBE_PATH` が未設定だと9件とも設定を求めるpanicで失敗するため、`app.settings.json` と同じ WinGet Links の ffmpeg/ffprobe を設定して実行した
+    - `bun run check`: 0 errors / 0 warnings
+    - `bun run test`: 5ファイル55件が成功
+    - `bun scripts/contrast-check.ts`: 文字色×背景色はすべて4.5:1以上（T5-11の結果と同じ）
 - [ ] T6-2 【エージェント】手動検証用の派生サンプルを作るスクリプト `scripts/make_samples.ts` を作成し、実行する
   - 依存: T1-8, T4-3
   - `samples/` の前編の実pptxと実ppsxをそれぞれ元にして、`samples/derived/pptx/` と `samples/derived/ppsx/` に同じ構成の5種類（原本コピー・リンク切れ版・音声形式不一致版・音声なし版・一部無音版）を生成する。種類とファイル名は imple 6.4
