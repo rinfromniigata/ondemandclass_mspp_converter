@@ -460,8 +460,16 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - 変換後に `soffice` / `soffice.bin` のプロセスは残っていない
     - PDFのサイズとページ数は T4-5 の結果（84,785,720バイト・33ページ）と一致する。所要時間は T4-5（ppsx 9.4〜18.4秒、pptx 初回26.7秒）と同程度で、120秒のタイムアウトに余裕がある
     - 見た目（フォント・図形）の確認は W6-3（【ユーザー】）で行う
-- [ ] T6-4 【エージェント】`bun run tauri build` でリリースビルドを作成し、実行ファイルと同じフォルダの `app.settings.json` が読まれることを確認する
+- [x] T6-4 【エージェント】`bun run tauri build` でリリースビルドを作成し、実行ファイルと同じフォルダの `app.settings.json` が読まれることを確認する
   - 依存: T6-1
+  - 実施メモ（実行結果 261003094040）:
+    - `bun run tauri build`: 終了コード0（Rustのreleaseビルド5分20秒、全体約5分51秒）。生成物は `src-tauri/target/release/ondemandclass_mspp_converter.exe`（4,803,584バイト）、`bundle/msi/ondemandclass_mspp_converter_0.1.0_x64_en-US.msi`（2.19 MiB）、`bundle/nsis/ondemandclass_mspp_converter_0.1.0_x64-setup.exe`（1.50 MiB）
+    - 警告は W1-1 と同じ `linker_messages`（MSVCリンカーの情報メッセージ）1件のみ
+    - 設定ファイルの読み込み確認: 実行ファイルだけをリポジトリ外の一時フォルダ（スクラッチ領域の `release_test\`）へコピーし、作業フォルダをユーザーフォルダにして起動、ウィンドウのスクリーンショットで画面を確認した（3通り。各回とも確認後に終了）
+      - 設定ファイルなし: 「app.settings.json が見つかりません（…\release_test\app.settings.json）」と表示。探索先が実行ファイルと同じフォルダであり、リポジトリ直下や作業フォルダではないことを確認
+      - 同じフォルダに `ffmpegPath` だけ存在しないパスにした設定を置く: 「設定ファイルの ffmpegPath を確認してください（C:\no_such_dir\ffmpeg.exe が見つかりません）」と表示。そのフォルダのファイルの内容が読まれていることを確認
+      - 同じフォルダに実環境の `app.settings.json` を置く: エラー表示なしでドロップ待ちの画面になる
+    - リリースビルドでの実ファイルの変換は W6-12（【ユーザー】）で確認する
 
 ## Phase 7: リリース準備
 - [ ] T7-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
