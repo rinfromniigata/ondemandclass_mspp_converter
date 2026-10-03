@@ -49,7 +49,13 @@ export interface ActionStep<TInput, TOutput> {
 // パイプライン全体の状態。Wizard.svelte はこれだけを見て表示を切り替える
 export type PipelineState =
   | { view: "idle"; notice?: string } // notice: 直前の受付拒否理由（拡張子不正・複数ファイル等）
-  | { view: "processing"; inputPath: string; running: string[]; results: StepResult[] } // running: 実行中ステップの name
+  | {
+      view: "processing";
+      inputPath: string;
+      running: string[]; // 実行中ステップの name
+      results: StepResult[];
+      progress: Record<string, number>; // ステップ名 → 0〜1。進捗を通知するステップ（音声結合）の実行中だけ持つ
+    }
   | { view: "done"; inputPath: string; results: StepResult[]; outputs: { audio: string; pdf: string; json: string } }
   | {
       view: "error";

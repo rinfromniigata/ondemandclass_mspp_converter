@@ -30,8 +30,14 @@
   const extract = ok("pptx解析", "18枚のスライドを解析しました", ["スライド7：音声ファイルのリンクが切れています"]);
 
   const samples: Record<Exclude<Screen, "dialog">, PipelineState> = {
-    "processing-extract": { view: "processing", inputPath: input, running: ["pptx解析"], results: [] },
-    processing: { view: "processing", inputPath: input, running: ["音声結合"], results: [extract, ok("PDF変換", "PDFに変換しました")] },
+    "processing-extract": { view: "processing", inputPath: input, running: ["pptx解析"], results: [], progress: {} },
+    processing: {
+      view: "processing",
+      inputPath: input,
+      running: ["音声結合"],
+      results: [extract, ok("PDF変換", "PDFに変換しました")],
+      progress: {},
+    },
     done: {
       view: "done",
       inputPath: input,

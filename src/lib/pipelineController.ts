@@ -79,17 +79,27 @@ export function createPipelineController(deps: PipelineControllerDeps): Pipeline
       }
     }
 
-    // 4. 処理中に遷移し、ステップの開始・完了を running / results に反映する
-    store.set({ view: "processing", inputPath, running: [], results: [] });
+    // 4. 処理中に遷移し、ステップの開始・進捗・完了を running / progress / results に反映する
+    store.set({ view: "processing", inputPath, running: [], results: [], progress: {} });
     const summary = await deps.createOrchestrator(settings).run(inputPath, outputs, {
       onStart: (name) =>
         store.update((s) => (s.view === "processing" ? { ...s, running: [...s.running, name] } : s)),
-      onProgress: (r) =>
+      // 完了後に遅れて届いた進捗で値が復活しないよう、実行中のステップだけ受け付ける
+      onStepProgress: (name, ratio) =>
         store.update((s) =>
-          s.view === "processing"
-            ? { ...s, running: s.running.filter((n) => n !== r.stepName), results: [...s.results, r] }
-            : s,
+          s.view === "processing" && s.running.includes(name) ? { ...s, progress: { ...s.progress, [name]: ratio } } : s,
         ),
+      onProgress: (r) =>
+        store.update((s) => {
+          if (s.view !== "processing") return s;
+          const { [r.stepName]: _done, ...progress } = s.progress;
+          return {
+            ...s,
+            running: s.running.filter((n) => n !== r.stepName),
+            results: [...s.results, r],
+            progress,
+          };
+        }),
     });
 
     // 5. 3ステップすべて成功なら done、1つでも失敗なら error

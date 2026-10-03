@@ -11,6 +11,7 @@ export interface AudioConcatInput {
   inputPath: string;
   slideAudioMap: SlideAudioMap;
   outPath: string;
+  onProgress?: (ratio: number) => void; // 進捗（0〜1）。単調化・間引きは Rust 側で済んでいる
 }
 
 export interface AudioConcatOutput {
@@ -51,20 +52,28 @@ export class AudioConcatStep implements ActionStep<AudioConcatInput, AudioConcat
     private readonly cmd: Pick<Commands, "runFfmpegConcat"> = commands,
   ) {}
 
-  async execute({ inputPath, slideAudioMap, outPath }: AudioConcatInput): Promise<StepResult & { data?: AudioConcatOutput }> {
+  async execute({
+    inputPath,
+    slideAudioMap,
+    outPath,
+    onProgress,
+  }: AudioConcatInput): Promise<StepResult & { data?: AudioConcatOutput }> {
     try {
       const slides = slideAudioMap.slides;
       if (!slides.some((s) => s.hasAudio)) {
         return { stepName: this.name, success: false, message: "音声を含むスライドがありません" };
       }
 
-      const result = await this.cmd.runFfmpegConcat({
-        inputPath,
-        slideIndices: slides.map((s) => s.slideIndex),
-        segments: buildSegments(slides, this.settings),
-        outPath,
-        reencodeOnMismatch: this.settings.audioReencodeOnMismatch,
-      });
+      const result = await this.cmd.runFfmpegConcat(
+        {
+          inputPath,
+          slideIndices: slides.map((s) => s.slideIndex),
+          segments: buildSegments(slides, this.settings),
+          outPath,
+          reencodeOnMismatch: this.settings.audioReencodeOnMismatch,
+        },
+        onProgress,
+      );
       return {
         stepName: this.name,
         success: true,

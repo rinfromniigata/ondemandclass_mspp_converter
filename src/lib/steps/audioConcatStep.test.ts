@@ -83,18 +83,41 @@ describe("AudioConcatStep", () => {
   it("全スライドの番号と区間を渡し、timestamps を data として返す", async () => {
     const { runFfmpegConcat, step: s } = step(Promise.resolve({ timestamps, reencoded: false }));
     const r = await s.execute({ inputPath: "in.pptx", slideAudioMap: { slides: [slide(1, ["m1"]), slide(2, [])], warnings: [] }, outPath: "o.m4a" });
-    expect(runFfmpegConcat).toHaveBeenCalledWith({
-      inputPath: "in.pptx",
-      slideIndices: [1, 2],
-      segments: [
-        { slideIndex: 1, kind: "media", mediaPath: "m1" },
-        { slideIndex: 2, kind: "silence", durationSec: 3 },
-      ],
-      outPath: "o.m4a",
-      reencodeOnMismatch: true,
-    });
+    expect(runFfmpegConcat).toHaveBeenCalledWith(
+      {
+        inputPath: "in.pptx",
+        slideIndices: [1, 2],
+        segments: [
+          { slideIndex: 1, kind: "media", mediaPath: "m1" },
+          { slideIndex: 2, kind: "silence", durationSec: 3 },
+        ],
+        outPath: "o.m4a",
+        reencodeOnMismatch: true,
+      },
+      undefined,
+    );
     expect(r).toMatchObject({ success: true, outputPath: "o.m4a", data: { timestamps } });
     expect(r.warnings).toBeUndefined();
+  });
+
+  it("onProgress を加工せずに runFfmpegConcat へ渡す", async () => {
+    const received: number[] = [];
+    const runFfmpegConcat = vi.fn(async (_a: unknown, onProgress?: (ratio: number) => void) => {
+      onProgress?.(0.25);
+      onProgress?.(1);
+      return { timestamps, reencoded: false };
+    });
+    const s = new AudioConcatStep(settings, { runFfmpegConcat });
+    const onProgress = (ratio: number) => received.push(ratio);
+    const r = await s.execute({
+      inputPath: "in.pptx",
+      slideAudioMap: { slides: [slide(1, ["m1"])], warnings: [] },
+      outPath: "o.m4a",
+      onProgress,
+    });
+    expect(r.success).toBe(true);
+    expect(runFfmpegConcat.mock.calls[0][1]).toBe(onProgress);
+    expect(received).toEqual([0.25, 1]);
   });
 
   it("再エンコードした場合は警告を載せる", async () => {

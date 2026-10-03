@@ -42,6 +42,7 @@ function setup(opts: { extract?: boolean; audio?: boolean; pdf?: boolean; json?:
   const cb: PipelineCallbacks = {
     onStart: (n) => log.push(`start:${n}`),
     onProgress: (r) => log.push(`done:${r.stepName}:${r.success ? "ok" : "ng"}`),
+    onStepProgress: (n, ratio) => log.push(`progress:${n}:${ratio}`),
   };
   return { steps, cb, log, orchestrator: new PipelineOrchestrator(steps as unknown as PipelineSteps) };
 }
@@ -56,6 +57,7 @@ describe("PipelineOrchestrator", () => {
       "exec:pptx解析",
       "done:pptx解析:ok",
       "start:音声結合",
+      "progress:音声結合:0",
       "start:PDF変換",
       "exec:音声結合",
       "exec:PDF変換",
@@ -69,7 +71,12 @@ describe("PipelineOrchestrator", () => {
       outputs: { audio: outputs.audio, pdf: outputs.pdf, json: outputs.json },
       failedSteps: [],
     });
-    expect(steps.audio.execute).toHaveBeenCalledWith({ inputPath: "/x/lec.pptx", slideAudioMap, outPath: outputs.audio });
+    expect(steps.audio.execute).toHaveBeenCalledWith({
+      inputPath: "/x/lec.pptx",
+      slideAudioMap,
+      outPath: outputs.audio,
+      onProgress: expect.any(Function),
+    });
     expect(steps.pdf.execute).toHaveBeenCalledWith({ inputPath: "/x/lec.pptx", outPath: outputs.pdf });
     expect(steps.json.execute).toHaveBeenCalledWith({ timestamps, outPath: outputs.json });
   });
@@ -110,6 +117,37 @@ describe("PipelineOrchestrator", () => {
     const { orchestrator, cb } = setup({ json: false });
     const summary = await orchestrator.run("/x/lec.pptx", outputs, cb);
     expect(summary).toEqual({ outputs: { audio: outputs.audio, pdf: outputs.pdf }, failedSteps: ["タイムスタンプ書き出し"] });
+  });
+
+  it("音声結合の進捗だけを、音声結合の名前で onStepProgress へ通知する", async () => {
+    const { orchestrator, cb, log, steps } = setup();
+    steps.audio.execute.mockImplementationOnce(async (input: unknown) => {
+      log.push("exec:音声結合");
+      const { onProgress } = input as { onProgress?: (ratio: number) => void };
+      onProgress?.(0.4);
+      onProgress?.(1);
+      return result("音声結合", true, { timestamps });
+    });
+
+    await orchestrator.run("/x/lec.pptx", outputs, cb);
+
+    expect(log.filter((l) => l.startsWith("progress:"))).toEqual([
+      "progress:音声結合:0",
+      "progress:音声結合:0.4",
+      "progress:音声結合:1",
+    ]);
+    // 開始直後の 0 は、音声結合の onStart の直後・execute より前に通知する
+    expect(log.indexOf("progress:音声結合:0")).toBe(log.indexOf("start:音声結合") + 1);
+    expect(log.indexOf("progress:音声結合:0")).toBeLessThan(log.indexOf("exec:音声結合"));
+    // ほかのステップには進捗の通知先を渡さない
+    expect(steps.pdf.execute.mock.calls[0][0]).not.toHaveProperty("onProgress");
+    expect(steps.json.execute.mock.calls[0][0]).not.toHaveProperty("onProgress");
+  });
+
+  it("pptx解析が失敗した場合は進捗を通知しない", async () => {
+    const { orchestrator, cb, log } = setup({ extract: false });
+    await orchestrator.run("/x/lec.pptx", outputs, cb);
+    expect(log.some((l) => l.startsWith("progress:"))).toBe(false);
   });
 
   it("音声結合と PDF 変換は並列に実行し、完了した順に onProgress へ通知する", async () => {

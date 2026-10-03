@@ -525,9 +525,19 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
       - 時間のかかる再エンコード方式（約2分）の表示を優先した。copy 方式（約7秒）は、取り出しの6秒で 0→20%、残りの約1秒で 20→100% と終盤に速く進む
     - 結果: `cargo test` 終了コード0（lib 141件・pptx_extract 9件）、ffmpeg 結合テスト9件すべて成功（7.88秒）。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし。計測用の一時テストと出力は削除した
     - 注意: `run_ffmpeg_concat` の `on_progress` は必須引数のため、T7-9 でフロントエンドが Channel を渡すまで、アプリからの音声結合は引数不足で失敗する
-- [ ] T7-9 【エージェント】TypeScript側を変更する（`tauriCommands.ts` の `runFfmpegConcat`、`AudioConcatStep`、`PipelineCallbacks.onStepProgress` と Orchestrator、`PipelineState.progress` と Controller）。Vitest の単体テストを追加・更新する
+- [x] T7-9 【エージェント】TypeScript側を変更する（`tauriCommands.ts` の `runFfmpegConcat`、`AudioConcatStep`、`PipelineCallbacks.onStepProgress` と Orchestrator、`PipelineState.progress` と Controller）。Vitest の単体テストを追加・更新する
   - 依存: T5-6, T7-8
   - imple 4.1・4.3・4.5・4.6・6.2
+  - 実施メモ（実行結果 261003132433）:
+    - `Channel` の確認（`@tauri-apps/api` 2.12.1 の `core.d.ts`）: `new Channel<T>(onmessage?)` で作り、Rust の同名引数（`on_progress` ↔ `onProgress`）に渡す。ハンドラーは invoke の前に設定する必要がある（設定前に届いた値は再送されない）ため、コンストラクタで渡した
+    - `tauriCommands.ts`: `runFfmpegConcat(a, onProgress?)` とし、`onProgress` がなくても Channel を渡す（Rust 側の引数が必須のため）。これで T7-8 の注意（アプリからの音声結合が引数不足で失敗する）は解消した
+    - `AudioConcatStep`: `AudioConcatInput.onProgress` を `runFfmpegConcat` の第2引数へそのまま渡す
+    - `orchestrator.ts`: `PipelineCallbacks.onStepProgress` を追加。音声結合の `onStart` の直後に `onStepProgress(音声結合, 0)` を呼び、`execute` に `onProgress` を渡す。PDF変換・JSON書き出しには渡さない
+    - `pipelineController.ts`: processing を `progress: {}` で始め、`onStepProgress` は `running` にあるステップだけ反映する。`onProgress`（完了）で `running` と同時に `progress` からも消す
+    - `PipelineState.processing` に `progress` が必須になったため、`/dev/screens` の既存の見本2件に `progress: {}` を加えた（型を満たすためだけ。進捗中の見本の追加と画面の変更は T7-10）
+    - テスト: audioConcatStep 1件・orchestrator 2件・pipelineController 3件を追加し、既存の呼び出し引数とログの期待値を更新した。`bun run test` 終了コード0（5ファイル61件。前回55件）、`bun run check` エラー0・警告0（371ファイル）
+    - 途中で、追加した orchestrator のテストが1件失敗した。差し替えたモックが `exec:` のログを残していなかったためで（テスト側の誤り）、モックでログを残すよう直して合格した
+    - Channel を通した実機での受け渡しは、Vitest（node 環境）では確かめられない。画面表示を作る T7-10 の後、W7-6 で確認する
 - [ ] T7-10 【エージェント】`ProgressIndicator`（確定型 `value`）・`ListItem`（`progress`）・`StepLog`・`ProcessingView` を変更し、`/dev/ui` に確定型（0%・42%・100%）、`/dev/screens` に音声結合の進捗中の processing 画面の見本を追加する
   - 依存: T5-9, T7-9
   - imple 5.3・5.4。色・寸法はトークン経由のみ

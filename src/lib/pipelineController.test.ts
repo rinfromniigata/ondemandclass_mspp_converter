@@ -89,7 +89,7 @@ describe("pipelineController: 受付判定", () => {
 
   it("idle 以外のときのドロップは無視する", async () => {
     const { controller, store, checkOutputsExist } = setup();
-    const processing: PipelineState = { view: "processing", inputPath: "/x/other.pptx", running: [], results: [] };
+    const processing: PipelineState = { view: "processing", inputPath: "/x/other.pptx", running: [], results: [], progress: {} };
     store.set(processing);
     await controller.startConversion([input]);
     expect(get(store)).toBe(processing);
@@ -162,10 +162,71 @@ describe("pipelineController: 状態遷移", () => {
     const { controller, snapshots } = setup();
     await controller.startConversion([input]);
 
-    expect(snapshots[0]).toEqual({ view: "processing", inputPath: input, running: [], results: [] });
+    expect(snapshots[0]).toEqual({ view: "processing", inputPath: input, running: [], results: [], progress: {} });
     expect(snapshots[1]).toMatchObject({ running: ["pptx解析"], results: [] });
     expect(snapshots[2]).toMatchObject({ running: ["音声結合", "PDF変換"], results: [ok("pptx解析")] });
     expect(snapshots[3]).toMatchObject({ running: ["音声結合"], results: [ok("pptx解析"), ok("PDF変換")] });
+  });
+
+  it("onStepProgress で実行中ステップの progress を更新し、完了時に消す", async () => {
+    const snaps: PipelineState[] = [];
+    const { controller, store } = setup({
+      run: async (_i, outputs, cb) => {
+        cb.onStart("音声結合");
+        cb.onStart("PDF変換");
+        cb.onStepProgress("音声結合", 0);
+        snaps.push(get(store));
+        cb.onStepProgress("音声結合", 0.42);
+        snaps.push(get(store));
+        cb.onProgress(ok("音声結合"));
+        snaps.push(get(store));
+        cb.onProgress(ok("PDF変換"));
+        return { outputs: { audio: outputs.audio, pdf: outputs.pdf, json: outputs.json }, failedSteps: [] };
+      },
+    });
+    await controller.startConversion([input]);
+
+    expect(snaps[0]).toMatchObject({ progress: { 音声結合: 0 } });
+    expect(snaps[1]).toMatchObject({ progress: { 音声結合: 0.42 } });
+    // 完了したステップの値は消え、ほかの実行中ステップ（PDF変換）は残る
+    expect(snaps[2]).toMatchObject({ running: ["PDF変換"], progress: {} });
+  });
+
+  it("実行中でないステップの進捗（完了後に遅れて届いたもの等）は無視する", async () => {
+    const snaps: PipelineState[] = [];
+    const { controller, store } = setup({
+      run: async (_i, outputs, cb) => {
+        cb.onStart("音声結合");
+        cb.onStepProgress("音声結合", 0.5);
+        cb.onProgress(ok("音声結合"));
+        cb.onStepProgress("音声結合", 1); // 完了後に遅れて届いた
+        cb.onStepProgress("PDF変換", 0.3); // 開始していない
+        snaps.push(get(store));
+        return { outputs: { audio: outputs.audio, pdf: outputs.pdf, json: outputs.json }, failedSteps: [] };
+      },
+    });
+    await controller.startConversion([input]);
+    expect(snaps[0]).toMatchObject({ progress: {} });
+  });
+
+  it("前回の進捗を持ち越さず、空の progress で processing を始める", async () => {
+    const snaps: PipelineState[] = [];
+    let calls = 0;
+    const { controller, store } = setup({
+      run: async (_i, outputs, cb) => {
+        snaps.push(get(store));
+        calls += 1;
+        cb.onStart("音声結合");
+        // 1回目は完了を通知せずに終える（progress が残った状態）
+        cb.onStepProgress("音声結合", 0.7);
+        if (calls === 2) cb.onProgress(ok("音声結合"));
+        return { outputs: { audio: outputs.audio, pdf: outputs.pdf, json: outputs.json }, failedSteps: [] };
+      },
+    });
+    await controller.startConversion([input]);
+    store.set({ view: "idle" });
+    await controller.startConversion([input]);
+    expect(snaps[1]).toMatchObject({ view: "processing", running: [], progress: {} });
   });
 
   it("3ステップすべて成功なら done に遷移する", async () => {
