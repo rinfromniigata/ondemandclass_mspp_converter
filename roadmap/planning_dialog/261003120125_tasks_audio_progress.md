@@ -476,9 +476,18 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
 - T7-1〜T7-4 → Phase 8 の T8-1〜T8-4 へ移動（リリース準備を最終Phaseに保つため。`261003115642_change_audio_progress.md`）
 - [x] T7-5 【エージェント】スペックシート v3 を作成する（Progress Indicator の確定型、`run_ffmpeg_concat` の進捗通知、`PipelineState.progress` ほか）
   - 実施メモ（261003）: 仕様変更の承認後の手順として作成。`specs/ondemandclass_mspp_converter_SPEC_v3.md`。v2 は `archived/` へ移動。デザインアセット（`assets/design/`）は変更なし
-- [ ] T7-6 【エージェント】`process.rs` に `run_with_timeout_streaming`（stdout を行ごとにコールバックへ渡す）を追加し、`run_with_timeout` をその上に作り直す。単体テストを追加する
+- [x] T7-6 【エージェント】`process.rs` に `run_with_timeout_streaming`（stdout を行ごとにコールバックへ渡す）を追加し、`run_with_timeout` をその上に作り直す。単体テストを追加する
   - 依存: T2-1, T7-5
   - imple 3.3。既存の process の単体テストがそのまま通ること
+  - 実施メモ（実行結果 261003121932）:
+    - stdout の読み取りスレッドを、全体を読み切って1回送る方式から、`read_until(b'\n')` で1行ずつ送る方式（`spawn_line_reader`）に変えた。本体はポーリングの待ち時間を `recv_timeout` に使い、届いた行を呼び出し元のスレッドでコールバックへ渡す（`LineSink`）。stderr は従来どおり全体を読み切る
+    - コールバックに渡す行は行末の `\n` / `\r\n` を除く（`trim_line_end`）。`ProcessOutput.stdout` には改行込みの元の出力を残す。改行で終わらない最後の行も渡す
+    - タイムアウト時は、それまでに届いた行だけを渡す（kill 後の残りは渡さない）。タイムアウト・kill_tree・パイプの読み切り猶予（5秒）は従来と同じ処理を共有する
+    - `run_with_timeout` は何もしないコールバックで `run_with_timeout_streaming` を呼ぶだけにした。呼び出し元（ffprobe・ffmpeg・soffice）の変更はなし
+    - 追加した単体テスト5件: 行の順序と改行の除去、終了前に行が渡ること（1行目の受け取りから戻るまで1秒以上）、改行のない最後の行、タイムアウト時の kill とそれまでの行の受け渡し、`trim_line_end`
+    - 結果: `cargo test` 終了コード0。lib 125件（process 12件。既存7件はそのまま成功）、`pptx_extract` 9件すべて成功。`cargo fmt --check`・`cargo clippy --all-targets` も指摘なし
+    - 既存の動作の確認として、ffmpeg 結合テスト（`FFMPEG_PATH`・`FFPROBE_PATH` を設定した `cargo test --test concat_integration -- --ignored`）も9件すべて成功した（7.96秒）
+    - 補足: Windows の `set /p`（改行なしの出力に使用）は、入力が空だと終了コード1を返す。このため改行のない最後の行のテストでは、終了コードを確かめていない
 - [ ] T7-7 【エージェント】`audio/progress.rs`（`ProgressReporter`・`Span`・`parse_out_time_sec`）を実装し、単体テストを書く
   - 依存: T7-5
   - imple 3.6 progress.rs。配分の定数は初期値で置き、T7-8 で見直す

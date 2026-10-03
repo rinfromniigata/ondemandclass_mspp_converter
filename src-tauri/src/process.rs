@@ -1,10 +1,10 @@
 //! 外部プロセス（ffmpeg / ffprobe / soffice）の実行。
 //! タイムアウト制御、コンソール窓の非表示、stdout/stderr の別スレッド読み取りを行う。
 
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -52,7 +52,18 @@ impl ProcessOutput {
 
 /// `cmd` を実行し、終了を待って出力を返す。非ゼロ終了はエラーにしない（`ensure_success` で判定する）。
 /// stdin・stdout・stderr の設定はこの関数で上書きする。
-pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOutput, AppError> {
+pub fn run_with_timeout(cmd: Command, timeout: Duration) -> Result<ProcessOutput, AppError> {
+    run_with_timeout_streaming(cmd, timeout, &mut |_| {})
+}
+
+/// `run_with_timeout` と同じく実行し、stdout を1行読むごとに `on_stdout_line` へ渡す（行末の改行は除く）。
+/// コールバックは呼び出し元のスレッドで、出力された順に呼ぶ。渡した行は `ProcessOutput.stdout` にも残す。
+/// タイムアウトした場合、それまでに読めた行は渡すが、終了後の残りは渡さない
+pub fn run_with_timeout_streaming(
+    mut cmd: Command,
+    timeout: Duration,
+    on_stdout_line: &mut dyn FnMut(&str),
+) -> Result<ProcessOutput, AppError> {
     let program = Path::new(cmd.get_program()).display().to_string();
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -63,7 +74,7 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOu
         program: program.clone(),
         source,
     })?;
-    let stdout_rx = spawn_reader(child.stdout.take());
+    let mut stdout = LineSink::new(spawn_line_reader(child.stdout.take()), on_stdout_line);
     let stderr_rx = spawn_reader(child.stderr.take());
 
     let deadline = Instant::now() + timeout;
@@ -75,7 +86,8 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOu
                 if now >= deadline {
                     break None;
                 }
-                thread::sleep(POLL_INTERVAL.min(deadline - now));
+                // 待ち時間の間も stdout の行を受け取って渡す
+                stdout.pump(POLL_INTERVAL.min(deadline - now));
             }
             Err(source) => {
                 kill_tree(&mut child);
@@ -101,13 +113,82 @@ pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<ProcessOu
     };
 
     let drain_deadline = Instant::now() + PIPE_DRAIN_GRACE;
-    let stdout = receive_until(&stdout_rx, drain_deadline);
+    stdout.drain_until(drain_deadline);
     let stderr = receive_until(&stderr_rx, drain_deadline);
     Ok(ProcessOutput {
         status,
-        stdout,
+        stdout: stdout.into_text(),
         stderr,
     })
+}
+
+/// stdout の行を受け取り、コールバックへ渡しながら全体の文字列にためる
+struct LineSink<'a> {
+    rx: Receiver<String>,
+    on_line: &'a mut dyn FnMut(&str),
+    text: String,
+    /// 読み取りスレッドが終わった（EOF・読み取りエラー）か
+    closed: bool,
+}
+
+impl<'a> LineSink<'a> {
+    fn new(rx: Receiver<String>, on_line: &'a mut dyn FnMut(&str)) -> Self {
+        Self {
+            rx,
+            on_line,
+            text: String::new(),
+            closed: false,
+        }
+    }
+
+    /// 最大 `wait` だけ次の行を待ち、届いていた行をすべて渡す。読み取りが終わっていれば `wait` だけ眠る
+    fn pump(&mut self, wait: Duration) {
+        if self.closed {
+            thread::sleep(wait);
+            return;
+        }
+        match self.rx.recv_timeout(wait) {
+            Ok(line) => self.deliver(line),
+            Err(RecvTimeoutError::Timeout) => return,
+            Err(RecvTimeoutError::Disconnected) => {
+                self.closed = true;
+                return;
+            }
+        }
+        loop {
+            match self.rx.try_recv() {
+                Ok(line) => self.deliver(line),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    self.closed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// プロセス終了後、読み取りが終わるか期限が来るまで残りの行を渡す
+    fn drain_until(&mut self, deadline: Instant) {
+        while !self.closed {
+            match self
+                .rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            {
+                Ok(line) => self.deliver(line),
+                Err(RecvTimeoutError::Disconnected) => self.closed = true,
+                Err(RecvTimeoutError::Timeout) => break,
+            }
+        }
+    }
+
+    fn deliver(&mut self, line: String) {
+        (self.on_line)(trim_line_end(&line));
+        self.text.push_str(&line);
+    }
+
+    fn into_text(self) -> String {
+        self.text
+    }
 }
 
 #[cfg(windows)]
@@ -156,6 +237,38 @@ fn spawn_reader<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
         });
     }
     rx
+}
+
+/// パイプを別スレッドで1行ずつ読み、行末の改行を含めたまま1行ずつ送る。
+/// 最後の行が改行で終わらない場合もそのまま送る。読み終えるとスレッドが終わり、受信側は切断を受け取る
+fn spawn_line_reader<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    if let Some(pipe) = pipe {
+        thread::spawn(move || {
+            let mut reader = BufReader::new(pipe);
+            let mut buf = Vec::new();
+            loop {
+                buf.clear();
+                // 読み取りエラー時はそこまでに送った分で終える
+                match reader.read_until(b'\n', &mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {
+                        // 改行は ASCII のため、行単位で変換しても複数バイト文字は分断されない
+                        if tx.send(String::from_utf8_lossy(&buf).into_owned()).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    rx
+}
+
+/// 行末の `\n` / `\r\n` を除く
+fn trim_line_end(line: &str) -> &str {
+    let line = line.strip_suffix('\n').unwrap_or(line);
+    line.strip_suffix('\r').unwrap_or(line)
 }
 
 /// 期限までに読み取りスレッドが終わらなければ空文字列とする
@@ -301,6 +414,106 @@ mod tests {
         let lines: Vec<&str> = output.stdout.lines().collect();
         assert_eq!(lines.len(), 20000);
         assert_eq!(lines.last().map(|l| l.trim()), Some("line20000"));
+    }
+
+    #[test]
+    fn streaming_passes_lines_in_order_without_line_endings() {
+        let mut lines = Vec::new();
+        let output = run_with_timeout_streaming(
+            shell("echo alpha&& echo beta&& echo gamma"),
+            Duration::from_secs(30),
+            &mut |line| lines.push(line.to_string()),
+        )
+        .unwrap();
+        assert!(output.status.success());
+        // Windows の cmd は \r\n で出力するが、渡す行には改行を含めない
+        assert_eq!(lines, ["alpha", "beta", "gamma"]);
+        // stdout には元の出力（改行込み）を残す
+        assert_eq!(
+            output.stdout.lines().collect::<Vec<_>>(),
+            ["alpha", "beta", "gamma"]
+        );
+        assert!(output.stdout.ends_with('\n'));
+    }
+
+    #[test]
+    fn streaming_passes_lines_before_process_exits() {
+        // 1行目を出してから約2秒待って終わる
+        let script = if cfg!(windows) {
+            "echo first&& ping -n 3 127.0.0.1 > nul&& echo second"
+        } else {
+            "echo first; sleep 2; echo second"
+        };
+        let mut first_at = None;
+        let mut lines = Vec::new();
+        let output =
+            run_with_timeout_streaming(shell(script), Duration::from_secs(30), &mut |line| {
+                if line == "first" {
+                    first_at = Some(Instant::now());
+                }
+                lines.push(line.to_string());
+            })
+            .unwrap();
+        let returned_at = Instant::now();
+        assert!(output.status.success());
+        assert_eq!(lines, ["first", "second"]);
+        let first_at = first_at.expect("first が渡されていない");
+        assert!(
+            returned_at - first_at >= Duration::from_secs(1),
+            "終了の {:?} 前に渡された（終了前に渡されていない）",
+            returned_at - first_at
+        );
+    }
+
+    #[test]
+    fn streaming_passes_last_line_without_newline() {
+        let script = if cfg!(windows) {
+            "echo one&& <nul set /p =tail"
+        } else {
+            "echo one; printf tail"
+        };
+        let mut lines = Vec::new();
+        let output =
+            run_with_timeout_streaming(shell(script), Duration::from_secs(30), &mut |line| {
+                lines.push(line.to_string())
+            })
+            .unwrap();
+        // cmd の `set /p` は入力が空だと終了コード1になるため、終了コードは確かめない
+        assert_eq!(lines, ["one", "tail"]);
+        assert!(output.stdout.ends_with("tail"));
+    }
+
+    #[test]
+    fn streaming_kills_process_on_timeout() {
+        // 1行目を出したあと長く待つ。タイムアウトまでに出た行は渡される
+        let script = if cfg!(windows) {
+            "echo started&& ping -n 30 127.0.0.1 > nul"
+        } else {
+            "echo started; sleep 30"
+        };
+        let started = Instant::now();
+        let mut lines = Vec::new();
+        let err =
+            run_with_timeout_streaming(shell(script), Duration::from_millis(1500), &mut |line| {
+                lines.push(line.to_string())
+            })
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::ProcessTimeout { timeout, .. } if timeout == Duration::from_millis(1500)),
+            "unexpected error: {err:?}"
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(lines, ["started"]);
+    }
+
+    #[test]
+    fn trim_line_end_removes_lf_and_crlf_only() {
+        assert_eq!(trim_line_end("a\n"), "a");
+        assert_eq!(trim_line_end("a\r\n"), "a");
+        assert_eq!(trim_line_end("a"), "a");
+        assert_eq!(trim_line_end("a \r"), "a ");
+        assert_eq!(trim_line_end("\n"), "");
+        assert_eq!(trim_line_end("a\n\n"), "a\n");
     }
 
     #[test]
