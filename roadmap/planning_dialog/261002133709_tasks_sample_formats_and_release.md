@@ -434,7 +434,7 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
     - `bun run check`: 0 errors / 0 warnings
     - `bun run test`: 5ファイル55件が成功
     - `bun scripts/contrast-check.ts`: 文字色×背景色はすべて4.5:1以上（T5-11の結果と同じ）
-- [ ] T6-2 【エージェント】手動検証用の派生サンプルを作るスクリプト `scripts/make_samples.ts` を作成し、実行する
+- [x] T6-2 【エージェント】手動検証用の派生サンプルを作るスクリプト `scripts/make_samples.ts` を作成し、実行する
   - 依存: T1-8, T4-3
   - `samples/` の前編の実pptxと実ppsxをそれぞれ元にして、`samples/derived/pptx/` と `samples/derived/ppsx/` に同じ構成の5種類（原本コピー・リンク切れ版・音声形式不一致版・音声なし版・一部無音版）を生成する。種類とファイル名は imple 6.4
     - リンク切れ版: relsを `TargetMode="External"` に書き換え
@@ -443,6 +443,12 @@ v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
   - pptx と ppsx は basename が同じため、成果物が衝突しないよう形式ごとにフォルダを分ける
   - 生成後、各ファイルを `extract_pptx` 相当の処理（一時的な結合テスト等）に通し、意図した警告・音声なしになることを確認する
   - 必要に応じて devDependency に zip操作ライブラリを追加する
+  - 実施メモ（実行結果 261003093008）: `bun scripts/make_samples.ts` で `samples/derived/{pptx,ppsx}/` に5種類ずつ生成した（約6秒）。zip操作のため devDependency に `fflate`（0.8.3）を追加した。ffmpeg/ffprobe は `app.settings.json` のパスを使う
+    - 加工対象のスライド（表示順）はスクリプト冒頭の定数で決めている。`broken_link`: スライド3（音声リンク `rId3` を External に）／`format_mismatch`: スライド2の `media2.m4a` を aac/44100Hz/2ch → aac/22050Hz/2ch に再エンコード／`partial_silence`: スライド3・5の音声を除去／`no_audio`: 全33枚の音声を除去
+    - 音声の除去では、音声図形（`p:pic`）、`p:timing` 内のメディアノード（`p:audio`）と再生開始のアニメーション（`presetClass="mediacall"` の `p:par`。中身が空になったクリックグループも含む）、`p:bldP`、参照されなくなった音声・画像の Relationship、どこからも参照されなくなった `ppt/media/*.m4a` を取り除く。ほかのアニメーションは残す（音声だけだったスライド1は `p:timing` ごと除去）。触らない部分は元のXML文字列のまま書き戻している
+    - 確認: `src-tauri/tests/derived_samples.rs`（6件、すべて `#[ignore]`）を追加し、`FFPROBE_PATH` を設定して `cargo test --test derived_samples -- --ignored` を実行した。pptx・ppsx の両方で6件とも成功。リンク切れはスライド3だけで「スライド3：音声がリンク切れのため無音として扱います」の警告1件、形式不一致版はスライド2の音声だけサンプルレートが異なり（コーデック・チャンネル数は同じ）、音声なし版は全スライド音声なし・警告なし、一部無音版はスライド3・5だけ音声なし・警告なし、全派生版でスライド数と自動切り替え時間が原本と一致
+    - 確認: XMLを加工した `no_audio.pptx` と `partial_silence.ppsx` を soffice（`--headless --convert-to pdf`）で変換し、どちらも33ページのPDFになることを確かめた
+    - 再生成する場合は、スクリプトを再実行すれば `samples/derived/` が作り直される。加工対象のスライドを変える場合は、スクリプトとテストの定数を合わせること
 - [ ] T6-3 【エージェント】ppsxがsofficeでPDF化できることを、実ファイルのpptxとppsxの両方で確認する（スペック15章）
   - 依存: T4-5, T1-8（実ppsxがあるため T6-2 への依存を外した）
   - ppsx の PDF 化は T4-5 の実施時に実ファイルで成功済み。pptx での確認は T4-5 の再検証メモにある。本項目では、両形式の PDF のページ数が一致し、`<basename>.pdf` が作られないことを確認して結果をまとめる
