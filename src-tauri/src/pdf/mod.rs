@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use tempfile::TempDir;
 
+use self::strip_audio::write_pdf_source;
 use crate::error::AppError;
 use crate::fs_util::move_or_copy;
 use crate::process::run_with_timeout;
@@ -21,18 +22,21 @@ pub const SOFFICE_TIMEOUT: Duration = Duration::from_secs(120);
 /// - `profile_dir` はアプリ専用の LibreOffice ユーザープロファイル（起動をまたいで再利用する）。
 ///   ユーザーが起動中の LibreOffice とプロファイルを共有すると、変換がそちらへ渡されて失敗するため
 /// - 出力は一時フォルダに作ってから `out_path` へ移す（入力と同じフォルダの `<basename>.pdf` を上書きしない）
+/// - soffice には、音声の図形（再生アイコン）を除去した一時コピーを渡す（`strip_audio`）。
+///   コピーは入力と同じファイル名にし、出力名 `<stem>.pdf` と拡張子による pptx/ppsx の判別を変えない
 pub fn convert_to_pdf(
     soffice: &Path,
     profile_dir: &Path,
     input: &Path,
     out_path: &Path,
 ) -> Result<PathBuf, AppError> {
+    let invalid_name =
+        || AppError::Message(format!("入力ファイル名が不正です（{}）", input.display()));
     let stem = input
         .file_stem()
         .filter(|stem| !stem.is_empty())
-        .ok_or_else(|| {
-            AppError::Message(format!("入力ファイル名が不正です（{}）", input.display()))
-        })?;
+        .ok_or_else(invalid_name)?;
+    let file_name = input.file_name().ok_or_else(invalid_name)?;
     fs::create_dir_all(profile_dir).map_err(|source| AppError::Io {
         context: format!(
             "LibreOffice のプロファイルフォルダを作成できません（{}）",
@@ -45,6 +49,15 @@ pub fn convert_to_pdf(
         source,
     })?;
 
+    // 出力先（tmp 直下）とは別のサブフォルダに、加工済みコピーを置く
+    let source_dir = tmp.path().join("src");
+    fs::create_dir(&source_dir).map_err(|source| AppError::Io {
+        context: format!("一時フォルダを作成できません（{}）", source_dir.display()),
+        source,
+    })?;
+    let source = source_dir.join(file_name);
+    write_pdf_source(input, &source)?;
+
     let mut cmd = Command::new(soffice);
     cmd.arg(format!("-env:UserInstallation={}", file_url(profile_dir)))
         .args([
@@ -55,7 +68,7 @@ pub fn convert_to_pdf(
             "--outdir",
         ])
         .arg(tmp.path())
-        .arg(input);
+        .arg(&source);
     let output = run_with_timeout(cmd, SOFFICE_TIMEOUT)?.ensure_success(soffice)?;
 
     let mut pdf_name = stem.to_os_string();
@@ -156,16 +169,52 @@ mod tests {
     #[test]
     fn convert_reports_spawn_failure() {
         let dir = TempDir::new().unwrap();
+        // soffice の前に加工済みコピーを作るため、入力は読める zip にする
+        let input = dir.path().join("lecture.ppsx");
+        write_minimal_zip(&input);
         let err = convert_to_pdf(
             Path::new("this-soffice-does-not-exist.exe"),
             &dir.path().join("profile"),
-            Path::new("lecture.ppsx"),
+            &input,
             &dir.path().join("lecture_slides.pdf"),
         )
         .unwrap_err();
         assert!(matches!(err, AppError::ProcessSpawn { .. }), "{err:?}");
         // プロファイルフォルダは起動前に作る
         assert!(dir.path().join("profile").is_dir());
+    }
+
+    #[test]
+    fn convert_fails_before_soffice_when_copy_cannot_be_made() {
+        // 加工済みコピーを作れなければ、soffice を起動せずにエラーにする（再生アイコンつきのPDFを出さない）
+        let dir = TempDir::new().unwrap();
+        let input = dir.path().join("lecture.pptx");
+        fs::write(&input, b"not a zip").unwrap();
+        let out = dir.path().join("lecture_slides.pdf");
+        let err = convert_to_pdf(
+            Path::new("this-soffice-does-not-exist.exe"),
+            &dir.path().join("profile"),
+            &input,
+            &out,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().starts_with("pptx/ppsxとして読み込めません"),
+            "{err}"
+        );
+        assert!(!out.exists());
+    }
+
+    fn write_minimal_zip(path: &Path) {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
+        zip.start_file(
+            "ppt/slides/slide1.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(b"<p:sld/>").unwrap();
+        zip.finish().unwrap();
     }
 
     #[test]

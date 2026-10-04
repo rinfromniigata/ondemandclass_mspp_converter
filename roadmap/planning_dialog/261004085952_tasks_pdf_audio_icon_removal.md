@@ -594,9 +594,16 @@ v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リ�
     - エラー文言は `pptx/package.rs` に合わせた（「ファイルを開けません」「pptx/ppsxとして読み込めません」「{パート} をUTF-8として読み込めません」）。XMLの解析エラーにはパート名と入力パスを付ける
     - テストは、`PptxBuilder` が結合テスト側（`tests/common/`）にあるため `tests/pdf_source.rs` に置いた（11件）: pptx・ppsx での除去（3図形、テキスト・画面切り替え・timing・動画は残る）、コピーを `extract_from_file` で読める（4枚・音声なし・動画の警告は元と同じ）、ほかのエントリが圧縮済みバイト列・CRCとも同一でエントリの並びも同じ、入力のバイト列と更新日時が変わらない、音声のないパッケージは全エントリ同一、BOMつきスライド、スライド以外の同形XMLは書き換えない、壊れたXML（パート名・入力名つき）、UTF-8でない、zipでない、入力がない
     - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 154件・`pdf_source` 11件・`pptx_extract` 9件すべて成功
-- [ ] T9-4 【エージェント】`convert_to_pdf` を、一時フォルダ内の加工済みコピー（入力と同じファイル名）を soffice に渡すように変更する
+- [x] T9-4 【エージェント】`convert_to_pdf` を、一時フォルダ内の加工済みコピー（入力と同じファイル名）を soffice に渡すように変更する
   - 依存: T9-3
   - imple 3.7。シグネチャ・コマンド層・TypeScript は変えない。既存の `pdf` の単体テストがそのまま通ること
+  - 実施メモ（実行結果 261004091559）:
+    - `TempDir` の下に `src/` を作り、`src/<入力のファイル名>` に `write_pdf_source` でコピーを作って soffice に渡す。出力先（`--outdir`）は従来どおり `TempDir` 直下。PDFの検出・移動・エラー文言（入力パスを表示）は変えていない。シグネチャ・`commands/pdf_convert.rs`・TypeScript は変更なし
+    - コピーを作れない場合は soffice を起動せずにエラーにする（再生アイコンつきのPDFを出さない。スペック9章の10）
+    - 既存テストの修正: `convert_reports_spawn_failure` は存在しない入力（`lecture.ppsx`）で soffice の起動失敗を確かめていたが、起動前にコピーを作るようになったため、入力に最小のzipを書いてから実行するように変えた（確かめる内容は同じ）。`convert_rejects_input_without_file_name` はそのまま通る
+    - テスト追加: `convert_fails_before_soffice_when_copy_cannot_be_made`（zipでない入力で「pptx/ppsxとして読み込めません」になり、出力PDFが作られない）
+    - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 155件・`pdf_source` 11件・`pptx_extract` 9件すべて成功
+    - 実際の soffice での変換は T9-5（`tests/pdf_derived.rs`）と W9-2・W9-3 で確認する
 - [ ] T9-5 【エージェント】`tests/pdf_derived.rs`（`#[ignore]`、環境変数 `SOFFICE_PATH`）を追加する
   - 依存: T9-4, T6-2
   - imple 6.1。派生サンプルの `original`（pptx・ppsx）で、Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないこと
