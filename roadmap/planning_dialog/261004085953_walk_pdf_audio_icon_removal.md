@@ -235,8 +235,13 @@ v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リ�
       - 比較（`Emulation.setEmulatedMedia` で reduced-motion を解除）: `transition-duration` は `0.1s` になり、バーの遷移2件と回転のアニメーション3件が動いた
     - 結論: reduced-motion 時の遷移の停止は効いている。見えていた動きは、進捗が1%ごとに届き、そのたびにバーの長さが切り替わることによるもの（再エンコードでは1〜2秒ごとに数px）。項目の「バーが伸びる動きなしで値だけ更新され」は、なめらかに伸びる遷移がなく、値の更新ごとに長さが切り替わることを指すと解釈する
     - 検討した代替案（採用せず）: reduced-motion 時だけバーを10%刻みで更新する案、バーを隠して割合のテキストだけにする案。どちらも仕様変更になる
-- [ ] W7-9 【エージェント】変更・追加したコンポーネント（`ProgressIndicator`・`ListItem`・`StepLog`・`ProcessingView`）に、色・影・角丸・余白の直接の値がなく、トークン経由になっていることを確認する。確定型の割合テキストの色×背景色のコントラストが既存の組み合わせ（`bun scripts/contrast-check.ts`）に含まれていることも確認する
+- [x] W7-9 【エージェント】変更・追加したコンポーネント（`ProgressIndicator`・`ListItem`・`StepLog`・`ProcessingView`）に、色・影・角丸・余白の直接の値がなく、トークン経由になっていることを確認する。確定型の割合テキストの色×背景色のコントラストが既存の組み合わせ（`bun scripts/contrast-check.ts`）に含まれていることも確認する
   - 依存: T7-10
+  - 実施メモ（261004）: 合格
+    - 直接の値: 4ファイル（`ProgressIndicator.svelte`・`ListItem.svelte`・`StepLog.svelte`・`ProcessingView.svelte`）で、色（`#xxxxxx`・`rgb(a)`・`hsl(a)`・色名）・影の直書きは0件。角丸は `var(--radius-full)` だけ。余白は `var(--space-*)` と `0` だけ。参照しているトークン17個は、すべて `tokens.css` に定義がある
+    - 対象外として確認した値: バーのトラックと不定形の円の下地の `color-mix(in srgb, currentColor 24%, transparent)`（色は `--color-primary` を引き継ぐ。比率は T7-10 で不定形の下地と同じ値にそろえたもの）、円の線の太さ `stroke-width: 2.5`、不定形のアイコン寸法（24px・48px）、行の最小高さ `40px`（W5-10 の要件）。いずれも色・影・角丸・余白ではなく、`tokens.css` に該当するトークンもない
+    - 割合テキストのコントラスト: 文字色は `--color-text-muted`（`--font-size-sm`＝14px のため 4.5:1 基準）。置かれる場所は ProcessingView の Card（背景 `--color-surface`）の中の ListItem。確定型が出るのは処理中の行だけで、ResultView のログには出ない。`bun scripts/contrast-check.ts`（終了コード0）の既存の組み合わせ「`--color-text-muted` × `--color-surface`」に含まれ、ライト 6.19:1・ダーク 7.37:1
+    - 参考（文字以外、判定対象外）: バーの塗り `--color-primary` × `--color-surface` は、ライト 1.84:1（T5-11 の既知の値）、ダーク 8.93:1。進み具合は割合のテキストでも示している（T7-10 の実施メモどおり）
 - [ ] W7-10 【ユーザー】T7-11 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で音声結合の進捗表示が W7-6 と同じように出て、3ファイルが生成されることを確認する
   - 依存: T7-11
 
