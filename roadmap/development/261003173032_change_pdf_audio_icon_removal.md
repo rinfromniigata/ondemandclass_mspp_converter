@@ -1,7 +1,12 @@
 # 仕様変更サマリー（change）: PDFから音声の再生アイコンを除去する
 
-- 状態: **承認待ち**
-- 反映先（承認後に作成）: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v4.md`、新タイムスタンプの imple・tasks・walk
+- 状態: **承認済み**（261004、チャットでの承認。動画の図形は残す・設定項目は設けない、の2点も了承）
+- 反映先: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v4.md`（新版）、`roadmap/planning_dialog/261004085952_imple_pdf_audio_icon_removal.md`・`261004085952_tasks_pdf_audio_icon_removal.md`・`261004085953_walk_pdf_audio_icon_removal.md`
+- 反映時の補足（imple・tasks・walk 作成時に詰めた点。4.4の項目案から変えた箇所）
+  - スペックv4の作成を完了済みの T9-1 とし、実装項目を T9-2〜T9-6 とした（v3 の T7-5 と同じ扱い）
+  - soffice を使う結合テスト `tests/pdf_derived.rs`（`#[ignore]`、`SOFFICE_PATH`）を T9-5 として追加した。W9-2 はこのテストで確認する
+  - 入力が変更されないことの【ユーザー】確認を W9-4 として分けた。walk は W9-1〜W9-5
+  - soffice はエージェントのサンドボックス内では異常終了する（未加工の入力でも同様）ため、soffice を使う確認はサンドボックス外で実行すると tasks・imple に明記した
 - デザインアセット（`assets/design/` の tokens・brand・アイコン原本）: **変更なし**
 
 ---

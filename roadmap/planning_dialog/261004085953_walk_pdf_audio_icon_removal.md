@@ -1,16 +1,17 @@
-# 検証手順（walk）: 初期実装＋デザインシステム＋音声結合の進捗表示＋リリース
+# 検証手順（walk）: 初期実装＋デザインシステム＋音声結合の進捗表示＋PDFの再生アイコン除去＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
-- 実装タスク: `roadmap/planning_dialog/261003120125_tasks_audio_progress.md`
-- 前版: `roadmap/archived/261002133710_walk_sample_formats_and_release.md`（IDとチェック状態を引き継ぎ）
-- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v4.md`
+- 実装タスク: `roadmap/planning_dialog/261004085952_tasks_pdf_audio_icon_removal.md`
+- 前版: `roadmap/archived/261003120126_walk_audio_progress.md`（IDとチェック状態を引き継ぎ）
+- 変更理由: `roadmap/development/261003173032_change_pdf_audio_icon_removal.md`（前回: `261003115642_change_audio_progress.md`）
 
 tasksの各Phaseが終わったら、同じ番号のPhaseを検証する。
 （グローバルルール改訂 261002121815 の「Phaseの同期・アジャイル化」は、ユーザーの指示により本プロジェクトでは適用しない）
 Phase 5・6はスペック13章の受け入れ基準の確認を兼ねる。
 v2で追加した項目は W1-4・W5-4〜W5-10・W6-13。
-261002の変更で内容を変えた項目は W3-2・W4-3・W6-1〜W6-10・W6-12、追加した項目は旧 W7-1〜W7-3（現 W8-1〜W8-3）。
+261002の変更で内容を変えた項目は W3-2・W4-3・W6-1〜W6-10・W6-12、追加した項目は旧 W7-1〜W7-3（現 W10-1〜W10-3）。
 v3（261003の変更）で追加した項目は W7-4〜W7-10。リリース準備の検証は W7-1〜W7-3 から W8-1〜W8-3 へ移動した（旧IDは欠番）。
+v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リリース準備の検証は W8-1〜W8-3 から Phase 10 の W10-1〜W10-3 へ移動した（旧IDは欠番）。
 **実ファイル（pptx/ppsx）を前提にする検証は、必ず両方の形式で行う。** 実ファイルの構成は imple 6.4（前編は pptx・ppsx の両方、後編は ppsx のみ。派生サンプルは `samples/derived/pptx/` と `samples/derived/ppsx/`）。
 
 ---
@@ -31,7 +32,7 @@ v3（261003の変更）で追加した項目は W7-4〜W7-10。リリース準�
     - `git ls-files` で、4つのパス配下に追跡済みファイルが0件であることも確認（過去に誤ってコミットされていない）
 - [x] W1-4 【ユーザー】ウィンドウのタイトルバーとタスクバーに、アイコン原本から生成したアプリアイコンが表示されることを確認する
   - 依存: T1-10
-  - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方は W8-3（旧 W7-3）で確認する（261002 の変更で追加）
+  - 実施メモ: ユーザー報告により完了（Windowsで確認）。macOSでの見え方は W10-3（旧 W8-3・W7-3）で確認する（261002 の変更で追加）
 
 ## Phase 2: Rust基盤の検証
 - [x] W2-1 【エージェント】`cargo test` で process・settings の単体テストがすべて通ることを確認する
@@ -184,7 +185,7 @@ v3（261003の変更）で追加した項目は W7-4〜W7-10。リリース準�
 - [ ] W6-13 【エージェント】コードを検索し、コンポーネント内で色・影・角丸・余白が直接の値（`#xxxxxx`、`rgba(...)`、`px` の角丸・影等）で書かれておらず、`tokens.css` のトークン経由になっていることを確認する。また `src/lib/styles/tokens.css` の値が原本と一致することを差分で確認する
 
 ## Phase 7: 音声結合の進捗表示の検証
-- W7-1〜W7-3 → Phase 8 の W8-1〜W8-3 へ移動（`261003115642_change_audio_progress.md`）
+- W7-1〜W7-3 → Phase 8 の W8-1〜W8-3 へ移動（`261003115642_change_audio_progress.md`）。現在は Phase 10 の W10-1〜W10-3
 - [ ] W7-4 【エージェント】`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
   - 依存: T7-6, T7-7, T7-9, T7-10
   - process（`run_with_timeout_streaming`）・progress の単体テスト、TypeScript の進捗関連テスト（imple 6.1・6.2）の件数を実施メモに残す
@@ -203,14 +204,32 @@ v3（261003の変更）で追加した項目は W7-4〜W7-10。リリース準�
 - [ ] W7-10 【ユーザー】T7-11 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で音声結合の進捗表示が W7-6 と同じように出て、3ファイルが生成されることを確認する
   - 依存: T7-11
 
-## Phase 8: リリース準備の検証
-- [ ] W8-1 【エージェント】`.github/workflows/release.yml` を確認し、`v*` タグで起動すること、Windows x64 と macOS Universal のビルドがあること、ドラフトで作成すること、アイコンを生成する手順がないことを実施メモに記録する
-  - 依存: T8-2
-  - 旧ID: W7-1
-- [ ] W8-2 【ユーザー】タグのpush後、GitHub Actions が成功し、ドラフトリリースに Windows x64 と macOS Universal の成果物が付いていることを確認する
-  - 依存: T8-4
-  - 旧ID: W7-2
-- [ ] W8-3 【ユーザー】ドラフトリリースの macOS 版を macOS で開き、Dock・Finder でアプリアイコンが判別できることを確認する（Windows は W1-4 で確認済み）
-  - 依存: T8-4
+## Phase 8: リリース準備の検証（移動済み）
+- W8-1〜W8-3 → Phase 10 の W10-1〜W10-3 へ移動（`261003173032_change_pdf_audio_icon_removal.md`）
+
+## Phase 9: PDFの再生アイコン除去の検証
+- [ ] W9-1 【エージェント】`cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
+  - 依存: T9-2, T9-3, T9-4
+  - `pdf/strip_audio.rs` と `write_pdf_source` のテスト件数を実施メモに残す
+- [ ] W9-2 【エージェント】`cargo test --test pdf_derived -- --ignored`（`SOFFICE_PATH` つき、サンドボックス外）で、pptx・ppsx の `original` について、PDFに Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないことを確認する
+  - 依存: T9-5
+  - 変更前のPDF（`samples/derived/pptx/original_slides.pdf` 等）とファイルサイズを比べ、実施メモに残す
+- [ ] W9-3 【ユーザー】`bun run tauri dev` で `samples/derived/pptx/original.pptx` と `samples/derived/ppsx/original.ppsx` をそれぞれ変換し、PDFビューアーで開いて、再生アイコンが描かれず、これまで隠れていたテキスト・画像が見えること、ほかのスライド内容が欠けていないことを確認する
+  - 依存: T9-4
+  - 成果物が残っている場合は、上書き確認で「上書きする」を選んでよい
+- [ ] W9-4 【ユーザー】W9-3 の変換の後も、入力の pptx・ppsx を PowerPoint で開いて再生アイコンと音声が残っている（入力が変更されていない）ことを確認する
+  - 依存: W9-3
+- [ ] W9-5 【ユーザー】T9-6 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で W9-3 と同じ結果になり、3ファイルが生成されることを確認する
+  - 依存: T9-6
+
+## Phase 10: リリース準備の検証
+- [ ] W10-1 【エージェント】`.github/workflows/release.yml` を確認し、`v*` タグで起動すること、Windows x64 と macOS Universal のビルドがあること、ドラフトで作成すること、アイコンを生成する手順がないことを実施メモに記録する
+  - 依存: T10-2
+  - 旧ID: W8-1（さらに前は W7-1）
+- [ ] W10-2 【ユーザー】タグのpush後、GitHub Actions が成功し、ドラフトリリースに Windows x64 と macOS Universal の成果物が付いていることを確認する
+  - 依存: T10-4
+  - 旧ID: W8-2（さらに前は W7-2）
+- [ ] W10-3 【ユーザー】ドラフトリリースの macOS 版を macOS で開き、Dock・Finder でアプリアイコンが判別できることを確認する（Windows は W1-4 で確認済み）
+  - 依存: T10-4
   - macOS 上での変換動作は確認の対象外（imple 9章）
-  - 旧ID: W7-3
+  - 旧ID: W8-3（さらに前は W7-3）

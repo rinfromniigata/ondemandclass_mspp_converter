@@ -1,11 +1,11 @@
-# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム＋音声結合の進捗表示＋リリース
+# 実装設計（imple）: 初期アーキテクチャ＋デザインシステム＋音声結合の進捗表示＋PDFの再生アイコン除去＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
-- 対応tasks: `roadmap/planning_dialog/261003120125_tasks_audio_progress.md`
-- 対応walk: `roadmap/planning_dialog/261003120126_walk_audio_progress.md`
-- 前版: `roadmap/archived/261002133708_imple_sample_formats_and_release.md`
-- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
-- 前版からの変更: 音声結合の進捗通知と表示を追加（2章・3.1・3.3・3.6・3.7.1・4.1・4.3・4.5・4.6・5.3・5.4・6.1・6.2）
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v4.md`
+- 対応tasks: `roadmap/planning_dialog/261004085952_tasks_pdf_audio_icon_removal.md`
+- 対応walk: `roadmap/planning_dialog/261004085953_walk_pdf_audio_icon_removal.md`
+- 前版: `roadmap/archived/261003120124_imple_audio_progress.md`
+- 変更理由: `roadmap/development/261003173032_change_pdf_audio_icon_removal.md`（前回: `261003115642_change_audio_progress.md`）
+- 前版からの変更: PDF変換の前に音声の図形を除去する処理を追加（1章・3.1・3.7・3.7.0・6.1）。v3で変えた箇所は 2章・3.1・3.3・3.6・3.7.1・4.1・4.3・4.5・4.6・5.3・5.4・6.1・6.2
 
 本書はスペックシートの3章・6〜8章を実装単位に分解し、モジュールの責務・インターフェース・
 内部処理の方針を定める。スペックと食い違う場合はスペックを正とし、本書を修正する。
@@ -33,6 +33,7 @@
    - 結合方式の判定 → `audio/plan.rs` のみ
    - タイムスタンプ計算 → `audio/timeline.rs` のみ
    - 音声結合の進捗の配分・通知間引き → `audio/progress.rs` のみ
+   - PDFから除く図形の判定 → `pdf/strip_audio.rs` のみ（v4）
    - 見た目の値 → `tokens.css`（変更禁止）と `base.css`・各基本部品のみ
 
 ---
@@ -113,7 +114,8 @@ src-tauri/src/
 │  ├─ progress.rs          # 進捗の配分・単調化・間引き、-progress 出力の解釈（純粋ロジック）
 │  └─ concat.rs            # 一時dir・メディア取り出し・無音生成・ffmpeg結合
 └─ pdf/
-   └─ mod.rs               # convert_to_pdf（soffice実行・移動）
+   ├─ mod.rs               # convert_to_pdf（加工済みコピーの作成・soffice実行・移動）
+   └─ strip_audio.rs       # 音声図形の除去（v4。XMLの加工は純粋関数）
 ```
 
 ### 3.2 共通型（serde、`rename_all = "camelCase"`）
@@ -334,13 +336,35 @@ pub fn parse_out_time_sec(line: &str) -> Option<f64>;
 
 ### 3.7 `pdf/`
 
-- `convert_to_pdf(soffice, profile_dir, input, out_path) -> Result<PathBuf, AppError>`
+- `convert_to_pdf(soffice, profile_dir, input, out_path) -> Result<PathBuf, AppError>`（シグネチャはv3から変えない）
   1. `TempDir::new()`
-  2. `soffice -env:UserInstallation=<profile_dirのfile URL> --headless --norestore --convert-to pdf --outdir <tmp> <input>`
+  2. （v4）`<tmp>/src/<入力のファイル名>` に `write_pdf_source(input, そのパス)` で音声図形を除去したコピーを作る
+     - ファイル名を入力と同じにするのは、soffice の出力名 `<stem>.pdf` と、拡張子によるpptx/ppsxの判別を変えないため
+     - 出力先（`<tmp>`）とは別のサブフォルダに置く
+  3. `soffice -env:UserInstallation=<profile_dirのfile URL> --headless --norestore --convert-to pdf --outdir <tmp> <加工済みコピー>`
      - file URL は `file:///C:/Users/...` 形式（`\` → `/`、空白等はパーセントエンコード）
-  3. タイムアウト120秒
-  4. `<tmp>/<入力ファイル名のstem>.pdf` の存在を確認し、`out_path` へ移動
+  4. タイムアウト120秒
+  5. `<tmp>/<入力ファイル名のstem>.pdf` の存在を確認し、`out_path` へ移動
 - `profile_dir` はコマンド層で `app.path().app_local_data_dir()/lo_profile` を渡す
+- コマンド層（`commands/pdf_convert.rs`）・TypeScript・画面は変更しない
+
+#### 3.7.0 `pdf/strip_audio.rs`（v4）
+
+- `pub fn strip_audio_shapes(xml: &str) -> Result<Option<String>, AppError>`（純粋関数）
+  - スライドXMLから、音声の図形（`p:pic` のうち `nvPicPr` 直下の `nvPr` 直下に `audioFile` を持つもの）を取り除いた文字列を返す。該当がなければ `None`（呼び出し側は元のバイト列をそのままコピーする）
+  - quick-xml で読み、`pic` の開始タグの直前から終了タグの直後までのバイト範囲（`Reader::buffer_position`）を記録する。`pic` 内で上記の親子関係の `audioFile` を見たら、その範囲を削除対象にする。範囲を後ろから順に切り取る
+  - 要素はローカル名で判定し、親要素を確認する（`pptx/slide.rs` と同じ方針。それ以外の場所にある同名要素は対象にしない）
+  - `mc:AlternateContent` の中の `p:pic` も、分岐ごとにそれぞれ判定して除去する（どちらの分岐が使われてもPDFに出さないため）
+  - 動画の図形（`videoFile`）は対象にしない
+  - `p:timing` 内の `p:spTgt` は残す（PDFはアニメーションを使わず、LibreOffice が存在しない図形への参照を無視して変換できることを変更時の検証で確認した）
+  - XMLとして読めない場合は `AppError::Message`（パート名は呼び出し側で付ける）
+- `pub fn write_pdf_source(input: &Path, dest: &Path) -> Result<usize, AppError>`
+  - 入力のzipを開き、エントリ順を保って `dest` に新しいzipを書く。戻り値は除去した図形の数（テスト用）
+  - 名前が `ppt/slides/slide*.xml`（`ppt/slides/` 直下。`_rels` は除く）のエントリは文字列として読み（先頭のBOMは除く）、`strip_audio_shapes` が `Some` を返したら Deflate で書き直す
+  - それ以外のエントリ（`None` を返したスライドを含む）は `ZipWriter::raw_copy_file` で再圧縮せずにコピーする（音声・画像の大きいメディアを速くコピーするため）
+  - 入力ファイルは読むだけで変更しない
+  - zip・XMLを読めない、書けない場合は、パート名と入力パスを含む `AppError`
+  - zip crate の API（`raw_copy_file`・書き込みオプション等）はインストール済みのバージョン（`Cargo.lock`）と docs.rs で確認してから使う
 
 ### 3.7.1 `commands/audio_process.rs`（v3）
 
@@ -615,6 +639,15 @@ export function requestConfirm(req: ConfirmRequest): Promise<boolean>;
   - `audio/progress.rs`: `parse_out_time_sec`（正常値・`N/A`・別キー）、`Span::at` / `split`、`ProgressReporter`（逆行の無視・1%未満の間引き・1.0 の必ず送信・範囲外の丸め）
   - `concat_integration`（`#[ignore]`）: 既存ケースで通知を記録し、0〜1 に収まること・単調増加・最後が 1 であることを確認する
     （copy・再エンコード・copy失敗からの再試行の各方式。エラーケースでは 1 が送られないこと）
+
+- PDFの再生アイコン除去（v4）
+  - `pdf/strip_audio.rs` の単体テスト: 音声1つ・複数、音声なし（`None`）、動画のみ（`None`）、音声と動画が混在（音声だけ除去）、`mc:AlternateContent` の両分岐、
+    `nvPr` 以外にある同名の `audioFile`（除去しない）、除去後もXMLとして読めること、壊れたXML（エラー）
+  - `write_pdf_source` のテスト（`tests/common/fixture.rs` の `PptxBuilder` で入力を作る）: 音声図形が除去されること、
+    スライド以外のエントリと音声のないスライドが同じバイト列で残ること、エントリの並びが変わらないこと、入力ファイルが変更されないこと
+  - `tests/pdf_derived.rs`（`#[ignore]`、環境変数 `SOFFICE_PATH`）: 派生サンプルの `original`（pptx・ppsx）を `convert_to_pdf` で変換し、
+    PDFに `/Subtype/Screen` と `/EmbeddedFile` がないこと、ページ数（`/Type/Page` の数）が `extract_from_file` のスライド数と一致すること、入力ファイルのバイト列が変換の前後で同じことを確認する
+    - soffice はエージェントのサンドボックス内では異常終了する（変更時の検証で確認）。サンドボックス外で実行する
 
 ### 6.2 TypeScript（Vitest）
 

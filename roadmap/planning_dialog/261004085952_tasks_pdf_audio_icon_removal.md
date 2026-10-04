@@ -1,16 +1,17 @@
-# 実装タスク（tasks）: 初期実装＋デザインシステム＋音声結合の進捗表示＋リリース
+# 実装タスク（tasks）: 初期実装＋デザインシステム＋音声結合の進捗表示＋PDFの再生アイコン除去＋リリース
 
-- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v3.md`
-- 実装設計: `roadmap/planning_dialog/261003120124_imple_audio_progress.md`
-- 検証手順: `roadmap/planning_dialog/261003120126_walk_audio_progress.md`
-- 前版: `roadmap/archived/261002133709_tasks_sample_formats_and_release.md`（IDとチェック状態を引き継ぎ）
-- 変更理由: `roadmap/development/261003115642_change_audio_progress.md`（前回: `261002133633_change_sample_formats_and_release.md`）
+- 対象スペック: `roadmap/specs/ondemandclass_mspp_converter_SPEC_v4.md`
+- 実装設計: `roadmap/planning_dialog/261004085952_imple_pdf_audio_icon_removal.md`
+- 検証手順: `roadmap/planning_dialog/261004085953_walk_pdf_audio_icon_removal.md`
+- 前版: `roadmap/archived/261003120125_tasks_audio_progress.md`（IDとチェック状態を引き継ぎ）
+- 変更理由: `roadmap/development/261003173032_change_pdf_audio_icon_removal.md`（前回: `261003115642_change_audio_progress.md`）
 
 各Phaseの完了後、対応するwalkのPhaseで検証してから次のPhaseへ進む。
 （グローバルルール改訂 261002121815 の「Phaseの同期・アジャイル化」は、ユーザーの指示により本プロジェクトでは適用しない。既存のIDとスケジュールを維持する）
 v2で追加した項目は T1-9・T1-10・T5-8〜T5-11。
-261002の変更で内容を変えた項目は T1-8・T6-2・T6-3、追加した項目は旧 T7-1〜T7-4（現 T8-1〜T8-4）。
+261002の変更で内容を変えた項目は T1-8・T6-2・T6-3、追加した項目は旧 T7-1〜T7-4（現 T10-1〜T10-4）。
 v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準備は T7-1〜T7-4 から T8-1〜T8-4 へ移動した（旧IDは欠番）。
+v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リリース準備は T8-1〜T8-4 から Phase 10 の T10-1〜T10-4 へ移動した（旧IDは欠番）。Phase 9 は W7 がすべて通過してから着手する。
 実ファイル（pptx/ppsx）を前提にする確認は、必ず両方の形式で行う（imple 6.4）。
 
 ---
@@ -473,7 +474,7 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
     - リリースビルドでの実ファイルの変換は W6-12（【ユーザー】）で確認する
 
 ## Phase 7: 音声結合の進捗表示
-- T7-1〜T7-4 → Phase 8 の T8-1〜T8-4 へ移動（リリース準備を最終Phaseに保つため。`261003115642_change_audio_progress.md`）
+- T7-1〜T7-4 → Phase 8 の T8-1〜T8-4 へ移動（リリース準備を最終Phaseに保つため。`261003115642_change_audio_progress.md`）。現在は Phase 10 の T10-1〜T10-4
 - [x] T7-5 【エージェント】スペックシート v3 を作成する（Progress Indicator の確定型、`run_ffmpeg_concat` の進捗通知、`PipelineState.progress` ほか）
   - 実施メモ（261003）: 仕様変更の承認後の手順として作成。`specs/ondemandclass_mspp_converter_SPEC_v3.md`。v2 は `archived/` へ移動。デザインアセット（`assets/design/`）は変更なし
 - [x] T7-6 【エージェント】`process.rs` に `run_with_timeout_streaming`（stdout を行ごとにコールバックへ渡す）を追加し、`run_with_timeout` をその上に作り直す。単体テストを追加する
@@ -564,22 +565,49 @@ v3（261003の変更）で追加した項目は T7-5〜T7-11。リリース準�
     - 生成物（いずれも今回のビルドで更新）: `src-tauri/target/release/ondemandclass_mspp_converter.exe`（4,820,992バイト。T6-4 時点は4,803,584バイト）、`bundle/msi/ondemandclass_mspp_converter_0.1.0_x64_en-US.msi`（2.20 MiB）、`bundle/nsis/ondemandclass_mspp_converter_0.1.0_x64-setup.exe`（1.51 MiB）
     - リリースビルドでの進捗表示の実機確認は W7-10（【ユーザー】）で行う
 
-## Phase 8: リリース準備
-- [ ] T8-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
-  - 依存: T6-4, T7-11
-  - imple 9章。音声結合の進捗表示も 0.1.0 の内容に含める
-  - 旧ID: T7-1
-- [ ] T8-2 【エージェント】`.github/workflows/release.yml` を作成する（`v*` タグで起動、tauri-actionで Windows x64 と macOS Universal をビルド、GitHub Releases にドラフトを作成）
+## Phase 8: リリース準備（移動済み）
+- T8-1〜T8-4 → Phase 10 の T10-1〜T10-4 へ移動（PDFの再生アイコン除去を Phase 9 に入れ、リリース準備を最終Phaseに保つため。`261003173032_change_pdf_audio_icon_removal.md`）
+
+## Phase 9: PDFの再生アイコン除去
+着手は W7（Phase 7 の検証）がすべて通過してから。
+- [x] T9-1 【エージェント】スペックシート v4 を作成する（`run_soffice_convert` の音声図形の除去、9章のエッジケース、13章の受け入れ基準）
+  - 実施メモ（261004）: 仕様変更の承認後の手順として作成。`specs/ondemandclass_mspp_converter_SPEC_v4.md`。v3 は `archived/` へ移動。デザインアセット（`assets/design/`）は変更なし
+  - 方式（音声の `p:pic` を一時コピーから削除）の選定根拠は change の3章（サンプルで soffice を実行して比較した結果）
+- [ ] T9-2 【エージェント】`pdf/strip_audio.rs` に `strip_audio_shapes` を実装し、単体テストを書く
+  - 依存: T9-1
+  - imple 3.7.0・6.1。判定の方針（ローカル名＋親要素の確認、AlternateContent の扱い）は `pptx/slide.rs` に合わせる
+  - 音声1つ・複数、音声なし、動画のみ、音声と動画の混在、AlternateContent の両分岐、`nvPr` 以外の同名要素、除去後のXMLが読めること、壊れたXML
+- [ ] T9-3 【エージェント】`write_pdf_source` を実装し、`PptxBuilder` で作った入力でテストを書く
+  - 依存: T9-2
+  - imple 3.7.0・6.1。zip crate の `raw_copy_file` 等は `Cargo.lock` の版の docs.rs で確認してから使う
+  - 音声図形の除去、ほかのエントリと音声のないスライドが同じバイト列で残ること、エントリの並び、入力ファイルが変更されないこと
+- [ ] T9-4 【エージェント】`convert_to_pdf` を、一時フォルダ内の加工済みコピー（入力と同じファイル名）を soffice に渡すように変更する
+  - 依存: T9-3
+  - imple 3.7。シグネチャ・コマンド層・TypeScript は変えない。既存の `pdf` の単体テストがそのまま通ること
+- [ ] T9-5 【エージェント】`tests/pdf_derived.rs`（`#[ignore]`、環境変数 `SOFFICE_PATH`）を追加する
+  - 依存: T9-4, T6-2
+  - imple 6.1。派生サンプルの `original`（pptx・ppsx）で、Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないこと
+  - soffice はサンドボックス外で実行する（サンドボックス内では異常終了する）
+- [ ] T9-6 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
+  - 依存: T9-5
+  - `cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`cargo test -- --ignored`（ffmpeg・soffice の環境変数つき）・`bun run check`・`bun run test`
+
+## Phase 10: リリース準備
+- [ ] T10-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
+  - 依存: T6-4, T7-11, T9-6
+  - imple 9章。音声結合の進捗表示とPDFの再生アイコン除去も 0.1.0 の内容に含める
+  - 旧ID: T8-1（さらに前は T7-1）
+- [ ] T10-2 【エージェント】`.github/workflows/release.yml` を作成する（`v*` タグで起動、tauri-actionで Windows x64 と macOS Universal をビルド、GitHub Releases にドラフトを作成）
   - 依存: T1-10, T6-4
   - tauri-action の版・入力名・権限は作成時点の公式ドキュメントで確認する
   - アイコンはリポジトリの `src-tauri/icons/` を使い、CIでは生成しない
-  - 旧ID: T7-2
-- [ ] T8-3 【エージェント】リリース前の確認を行い、コミットメッセージとタグ作成・pushのコマンドを提示して停止する
-  - 依存: T8-1, T8-2
+  - 旧ID: T8-2（さらに前は T7-2）
+- [ ] T10-3 【エージェント】リリース前の確認を行い、コミットメッセージとタグ作成・pushのコマンドを提示して停止する
+  - 依存: T10-1, T10-2
   - ローカルの `bun run tauri build` が成功すること
   - `src-tauri/icons/` 一式が `assets/design/` のマスターSVG（最新版）から生成されたものであること（再生成して差分がないこと等で確認する）
-  - 旧ID: T7-3
-- [ ] T8-4 【ユーザー】コミット・タグ作成・pushを行う
-  - 依存: T8-3
-  - ドラフトリリースの公開は W8-2・W8-3 の確認後にユーザーが行う
-  - 旧ID: T7-4
+  - 旧ID: T8-3（さらに前は T7-3）
+- [ ] T10-4 【ユーザー】コミット・タグ作成・pushを行う
+  - 依存: T10-3
+  - ドラフトリリースの公開は W10-2・W10-3 の確認後にユーザーが行う
+  - 旧ID: T8-4（さらに前は T7-4）

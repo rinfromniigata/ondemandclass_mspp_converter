@@ -1,4 +1,4 @@
-# オンデマンドスライドコンバーター 仕様書 v3
+# オンデマンドスライドコンバーター 仕様書 v4
 ### （Tauri / Bun / TypeScript / SvelteKit 版）
 
 対象読者：このツールを実装するエンジニア（Claude Code含む）
@@ -15,6 +15,9 @@
 - v3：音声結合ステップのみ、処理中にプログレスバーと割合（%）を表示する。全体の進捗は表示しない。
   Progress Indicator に確定型（Linear）を追加し、`run_ffmpeg_concat` に進捗通知を追加
   （`roadmap/development/261003115642_change_audio_progress.md`）
+- v4：PDF変換で、音声の図形（PowerPointの再生アイコン）を除去した一時コピーを変換し、
+  PDFに再生アイコン・音声データを出さない
+  （`roadmap/development/261003173032_change_pdf_audio_icon_removal.md`）
 
 ---
 
@@ -338,7 +341,7 @@ ondemandclass_mspp_converter/
 │  │  ├─ settings/                  # 設定ファイルの探索・読み込み・検証
 │  │  ├─ pptx/                      # pptx解析（順序解決・rels・p:timing・advTm）
 │  │  ├─ audio/                     # ffprobe解析、結合計画、タイムライン計算、ffmpeg実行
-│  │  ├─ pdf/                       # soffice実行
+│  │  ├─ pdf/                       # 音声図形の除去、soffice実行
 │  │  └─ process.rs                 # 外部プロセス実行共通処理（タイムアウト・窓非表示）
 │  ├─ icons/                        # tauri icon で生成
 │  ├─ capabilities/
@@ -557,18 +560,22 @@ Rust側の構造体はフロントの型と一致させるため `#[serde(rename
 
 ### `run_soffice_convert(input_path: String, out_path: String) -> Result<String, String>`
 - 責務：
-  1. `tempfile::TempDir` を出力先として
-     `soffice -env:UserInstallation=<アプリ専用プロファイル> --headless --convert-to pdf --outdir <一時dir> <input_path>`
+  1. `tempfile::TempDir` 内に、入力と同じファイル名で**音声の図形を除去したコピー**を作る
+     （`ppt/slides/slide*.xml` から `p:nvPicPr/p:nvPr/a:audioFile` を持つ `p:pic` 要素を削除する。
+     動画の図形（`a:videoFile`）とほかのパートはそのまま残す。入力ファイル自体は変更しない）
+  2. 一時フォルダを出力先として
+     `soffice -env:UserInstallation=<アプリ専用プロファイル> --headless --convert-to pdf --outdir <一時dir> <加工済みコピー>`
      を実行する。アプリ専用プロファイルはアプリのローカルデータフォルダ配下に置き、
      起動をまたいで再利用する（ユーザーが起動中のLibreOfficeとの衝突を避け、
      2回目以降の起動を速くするため）
-  2. 一時フォルダに生成された `<basename>.pdf` を `out_path`（`<basename>_slides.pdf`）へ移動する
+  3. 一時フォルダに生成された `<basename>.pdf` を `out_path`（`<basename>_slides.pdf`）へ移動する
      （元フォルダの同名 `<basename>.pdf` を上書きしないため。ドライブをまたぐ場合はコピー＋削除）
-  3. タイムアウトは120秒とし、超過時はプロセスを終了して `Err`
+  4. タイムアウトは120秒とし、超過時はプロセスを終了して `Err`
 - 出力：生成されたPDFのフルパス
-- 備考：LibreOfficeは埋め込み音声を無視して純粋にスライドの視覚内容
-  （テキスト・図形・画像）のみをPDF化するため、OCR工程は不要
-- エラー：sofficeが起動できない、非ゼロ終了、PDFが生成されない、タイムアウトの場合に `Err(String)`
+- 備考：LibreOfficeはスライドの視覚内容（テキスト・図形・画像）をテキスト層付きでPDF化するため、
+  OCR工程は不要。ただし音声の図形はそのままだと、再生アイコンの画像（下の要素を覆う）・再生用の注釈・
+  音声データ本体の埋め込みとしてPDFに出力されるため、手順1で除去する
+- エラー：音声図形の除去に失敗した（zip・XMLを読めない等）、sofficeが起動できない、非ゼロ終了、PDFが生成されない、タイムアウトの場合に `Err(String)`
 
 ### `check_outputs_exist(paths: Vec<String>) -> Vec<String>`
 - 責務：渡されたパスのうち既に存在するものを返す（上書き確認用）
@@ -798,6 +805,9 @@ export const pipelineState = writable<PipelineState>({ view: "idle" });
    必ず一時フォルダに出力してから `<basename>_slides.pdf` へ移動する。
 9. **動画ナレーション**：スライドに動画メディアが含まれる場合は警告を出し、
    無音スライドとして扱う（スコープ外）。
+10. **PDFの再生アイコン**：音声の図形はPDFに出さない（再生アイコンが下のテキスト・画像を覆うため）。
+   除去は一時コピーに対して行い、入力ファイルは変更しない。動画の図形は残す。
+   除去に失敗した場合は、アイコンつきのPDFを出さずPDF変換ステップを失敗とする。
 
 ---
 
@@ -887,6 +897,9 @@ bun run tauri build
 - [ ] 出力先に同名ファイルが既に存在する場合、処理開始前に
       アプリ内の確認ダイアログが表示され、キャンセルすると何も書き出されない
 - [ ] 入力と同じフォルダに `<basename>.pdf` が既にあっても上書きされない
+- [ ] PDFに音声の再生アイコンが描かれず、その下のテキスト・画像が見える
+- [ ] PDFに再生用の注釈・音声データが埋め込まれない
+- [ ] PDF変換の前後で入力のpptx/ppsxが変更されない
 - [ ] ffmpeg・ffprobe・soffice が `app.settings.json` の指定パスに存在しない
       場合、処理開始前にidle画面でエラーが表示され、処理は開始されない
 - [ ] 処理完了後、一時ディレクトリが残存していない
