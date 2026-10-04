@@ -242,19 +242,34 @@ v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リ�
     - 対象外として確認した値: バーのトラックと不定形の円の下地の `color-mix(in srgb, currentColor 24%, transparent)`（色は `--color-primary` を引き継ぐ。比率は T7-10 で不定形の下地と同じ値にそろえたもの）、円の線の太さ `stroke-width: 2.5`、不定形のアイコン寸法（24px・48px）、行の最小高さ `40px`（W5-10 の要件）。いずれも色・影・角丸・余白ではなく、`tokens.css` に該当するトークンもない
     - 割合テキストのコントラスト: 文字色は `--color-text-muted`（`--font-size-sm`＝14px のため 4.5:1 基準）。置かれる場所は ProcessingView の Card（背景 `--color-surface`）の中の ListItem。確定型が出るのは処理中の行だけで、ResultView のログには出ない。`bun scripts/contrast-check.ts`（終了コード0）の既存の組み合わせ「`--color-text-muted` × `--color-surface`」に含まれ、ライト 6.19:1・ダーク 7.37:1
     - 参考（文字以外、判定対象外）: バーの塗り `--color-primary` × `--color-surface` は、ライト 1.84:1（T5-11 の既知の値）、ダーク 8.93:1。進み具合は割合のテキストでも示している（T7-10 の実施メモどおり）
-- [ ] W7-10 【ユーザー】T7-11 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で音声結合の進捗表示が W7-6 と同じように出て、3ファイルが生成されることを確認する
+- [x] W7-10 【ユーザー】T7-11 で作り直したリリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、pptx・ppsx の両方で音声結合の進捗表示が W7-6 と同じように出て、3ファイルが生成されることを確認する
   - 依存: T7-11
+  - 実施メモ: ユーザー報告により完了（問題なし）
 
 ## Phase 8: リリース準備の検証（移動済み）
 - W8-1〜W8-3 → Phase 10 の W10-1〜W10-3 へ移動（`261003173032_change_pdf_audio_icon_removal.md`）
 
 ## Phase 9: PDFの再生アイコン除去の検証
-- [ ] W9-1 【エージェント】`cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
+- [x] W9-1 【エージェント】`cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
   - 依存: T9-2, T9-3, T9-4
   - `pdf/strip_audio.rs` と `write_pdf_source` のテスト件数を実施メモに残す
-- [ ] W9-2 【エージェント】`cargo test --test pdf_derived -- --ignored`（`SOFFICE_PATH` つき、サンドボックス外）で、pptx・ppsx の `original` について、PDFに Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないことを確認する
+  - 実施メモ（261004）: 5つとも終了コード0、エラー・警告なし
+    - `cargo fmt --check`: 差分なし。`cargo clippy --all-targets`: 警告・エラー0件
+    - `cargo test`: lib の単体テスト155件、結合テストは `pdf_source` 11件・`pptx_extract` 9件・`pdf_derived` 1件（`page_count_ignores_page_tree`）がすべて成功。`#[ignore]` は concat_integration 9件・derived_samples 6件・pdf_derived 1件（W9-2 で実行）
+      - `pdf/strip_audio.rs` 13件: 実ファイルと同じ形の音声1つ、複数、グループ内、音声なし・動画のみ（`None`）、音声と動画の混在、AlternateContent の両分岐、`pic/nvPicPr/nvPr` 以外の同名要素、開始タグ形式の `audioFile`、別プレフィックス、空白・日本語の保持、範囲が要素全体であること、壊れたXML
+      - `write_pdf_source`（`tests/pdf_source.rs`）11件: 音声図形の除去、コピーを `extract_from_file` で読める、ほかのエントリが変更なしでコピーされる、スライドのパートだけ書き換える、音声のないパッケージはそのままコピー、入力が変更されない、BOMつきスライド、壊れたXML（パート名つき）、UTF-8でない、zipでない、入力がない
+      - 関連: `pdf/mod.rs` 7件のうち `convert_fails_before_soffice_when_copy_cannot_be_made`（コピーを作れなければ soffice を起動しない）が T9-4 で追加したもの
+    - `bun run check`: 371ファイル、エラー0・警告0
+    - `bun run test`: 5ファイル61件すべて成功（TypeScript は Phase 9 で変更なし）
+- [x] W9-2 【エージェント】`cargo test --test pdf_derived -- --ignored`（`SOFFICE_PATH` つき、サンドボックス外）で、pptx・ppsx の `original` について、PDFに Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないことを確認する
   - 依存: T9-5
   - 変更前のPDF（`samples/derived/pptx/original_slides.pdf` 等）とファイルサイズを比べ、実施メモに残す
+  - 実施メモ（261004）: 合格
+    - サンドボックス外で、`SOFFICE_PATH` に `app.settings.json` の LibreOffice（`C:\Program Files\LibreOffice\program\soffice.exe`）を設定し、`cargo test --test pdf_derived -- --ignored` を実行した。1件成功（27.8秒、終了コード0）。soffice のプロセスは残っていない
+    - pptx・ppsx とも、PDF は33ページ（スライド数33と一致）、音声図形33個を除去、2,306,490バイト。`/Subtype/Screen`（再生用の注釈）と `/EmbeddedFile`（埋め込み音声）は0件（テスト内の assert）
+    - 入力（`samples/derived/pptx/original.pptx`・`samples/derived/ppsx/original.ppsx`）は、テスト内の比較（バイト列）に加え、テストの外で前後のSHA-256と更新日時を比べ、変化がないことを確認した
+    - ファイルサイズの比較: 変更前のPDFは `samples/derived/` に残っていなかった（pptx 側の成果物はなく、ppsx 側の `original_slides.pdf` は 261004 13:13 に新しい方式で作り直されていた）。そのため変更前のサイズは、W4-3・W6-4・T9-5 で記録した値と比べた。変更前は pptx・ppsx とも 84,785,720バイト、変更後は 2,306,490バイトで、約2.7%（約1/37）になった。変更前のPDFのサイズは入力（約85.8MB）とほぼ同じで、音声が埋め込まれていたためと考えられる
+    - 補足: 作り直されていた ppsx 側の `original_slides.pdf`（アプリで生成）も、Screen 注釈0件・EmbeddedFile 0件・33ページ・2,306,490バイトで、テストの出力と同じ大きさだった
 - [ ] W9-3 【ユーザー】`bun run tauri dev` で `samples/derived/pptx/original.pptx` と `samples/derived/ppsx/original.ppsx` をそれぞれ変換し、PDFビューアーで開いて、再生アイコンが描かれず、これまで隠れていたテキスト・画像が見えること、ほかのスライド内容が欠けていないことを確認する
   - 依存: T9-4
   - 成果物が残っている場合は、上書き確認で「上書きする」を選んでよい
