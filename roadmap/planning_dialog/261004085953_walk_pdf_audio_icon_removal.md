@@ -195,9 +195,17 @@ v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リ�
 
 ## Phase 7: 音声結合の進捗表示の検証
 - W7-1〜W7-3 → Phase 8 の W8-1〜W8-3 へ移動（`261003115642_change_audio_progress.md`）。現在は Phase 10 の W10-1〜W10-3
-- [ ] W7-4 【エージェント】`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
+- [x] W7-4 【エージェント】`cargo test`・`bun run check`・`bun run test` がエラーなく完了することを確認する
   - 依存: T7-6, T7-7, T7-9, T7-10
   - process（`run_with_timeout_streaming`）・progress の単体テスト、TypeScript の進捗関連テスト（imple 6.1・6.2）の件数を実施メモに残す
+  - 実施メモ（261004）: 3つとも終了コード0、エラー・警告なし
+    - `cargo test`（`src-tauri`）: lib の単体テスト155件すべて成功。結合テストは pptx_extract 9件・pdf_source 11件・pdf_derived 1件が成功。`#[ignore]` は concat_integration 9件・derived_samples 6件・pdf_derived 1件（ffmpeg・soffice・派生サンプルが必要なもの。W7-5 等で実行）
+      - process 12件のうち `run_with_timeout_streaming` 関連6件: 行を順序どおり改行なしで渡す・プロセス終了前に行を渡す・改行のない最後の行も渡す・タイムアウト時の kill・改行の除去（LF/CRLFのみ）。残り6件は従来の `run_with_timeout`
+      - `audio/progress.rs` 16件: `parse_out_time_sec` 2件（マイクロ秒の読み取り・別キーや `N/A` の無視）、`Span::at`/`split` 3件、`ProgressReporter` 5件（逆行と1%未満の間引き・ちょうど1%刻み・1.0 を1回だけ必ず送信・範囲外の丸めと NaN・送信済みの値の保持）、結合の進捗 4件（copy の段階進行・再エンコードの重み・copy失敗からの再試行で戻らない・終了しなければ 1 を送らない）、段階の重み・割合 2件
+    - `bun run check`: 371ファイル、エラー0・警告0
+    - `bun run test`（vitest）: 5ファイル61件すべて成功（W5-1 の55件から6件増）
+      - v3 で追加した進捗関連6件: audioConcatStep 1件（`onProgress` を加工せず `runFfmpegConcat` へ渡す）、orchestrator 2件（音声結合の進捗だけを `onStepProgress` へ通知・開始直後の 0 を `onStart` の直後かつ実行前に通知／pptx解析失敗時は通知しない）、pipelineController 3件（`progress` の更新と完了時の削除・完了後に遅れて届いた進捗の無視・processing 開始時に空の `progress` で初期化）
+      - imple 6.2 の v3 の観点はすべて上記に含まれる
 - [ ] W7-5 【エージェント】`cargo test -- --ignored`（ffmpeg の環境変数つき）で、結合テストの全ケースが通り、通知された割合が 0〜1 に収まって単調に増え、成功時は最後が 1、失敗時は 1 が送られないことを確認する
   - 依存: T7-8
   - copy・再エンコード・copy失敗からの再試行の各方式を含める
