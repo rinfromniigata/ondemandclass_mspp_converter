@@ -604,10 +604,15 @@ v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リ�
     - テスト追加: `convert_fails_before_soffice_when_copy_cannot_be_made`（zipでない入力で「pptx/ppsxとして読み込めません」になり、出力PDFが作られない）
     - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 155件・`pdf_source` 11件・`pptx_extract` 9件すべて成功
     - 実際の soffice での変換は T9-5（`tests/pdf_derived.rs`）と W9-2・W9-3 で確認する
-- [ ] T9-5 【エージェント】`tests/pdf_derived.rs`（`#[ignore]`、環境変数 `SOFFICE_PATH`）を追加する
+- [x] T9-5 【エージェント】`tests/pdf_derived.rs`（`#[ignore]`、環境変数 `SOFFICE_PATH`）を追加する
   - 依存: T9-4, T6-2
   - imple 6.1。派生サンプルの `original`（pptx・ppsx）で、Screen 注釈・埋め込み音声がないこと、ページ数がスライド数と一致すること、入力が変更されないこと
   - soffice はサンドボックス外で実行する（サンドボックス内では異常終了する）
+  - 実施メモ（実行結果 261004091905）:
+    - `original_pdf_has_no_audio_icons_or_embedded_audio`（`#[ignore]`）: pptx・ppsx の順に、`write_pdf_source` の除去数が原本の音声図形の数（`audio_media_paths` の合計）と一致すること、`convert_to_pdf` の出力が `%PDF-` で始まり `/Subtype/Screen`・`/EmbeddedFile` を含まないこと、ページ数（`/Type/Page`。`/Type/Pages` は除く）がスライド数と一致すること、入力のバイト列が変わらないことを確かめる。LibreOffice のプロファイルはテストごとの一時フォルダに作る
+    - ページ数の数え方の単体テスト `page_count_ignores_page_tree` も同じファイルに置いた（`#[ignore]` なし）
+    - 実行（サンドボックス外、`SOFFICE_PATH=C:\Program Files\LibreOffice\program\soffice.exe`、`--include-ignored`）: 2件成功（35.3秒）。pptx・ppsx とも 33ページ・音声図形33個を除去・PDF 2,306,490バイト（変更前の `samples/derived/pptx/original_slides.pdf` は 84,785,720バイト）
+    - `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 155件・`pdf_derived` 1件（1件ignore）・`pdf_source` 11件・`pptx_extract` 9件すべて成功
 - [ ] T9-6 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
   - 依存: T9-5
   - `cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`cargo test -- --ignored`（ffmpeg・soffice の環境変数つき）・`bun run check`・`bun run test`
