@@ -6,10 +6,11 @@
 
 ## 内容
 
-`roadmap/specs/` に、スペックシート v4 と同じ版番号でデザインアセット2点を置いた。
+`roadmap/specs/` に、スペックシート v4 と同じ版番号でデザインアセット3点を置いた。
 
 - `ondemandclass_mspp_converter_tokens_v4.css`（5,179バイト）
 - `ondemandclass_mspp_converter_brand_v4.md`（1,892バイト）
+- `ondemandclass_mspp_converter_icon_master_v4.svg`（1,920バイト。ユーザーの承認を得て追加）
 
 ## 理由
 
@@ -19,8 +20,9 @@ T1-9 でデザインアセットをリポジトリ直下から `src/`・`assets/
 
 - tokens: git履歴（5c87d89 の親）の原本。`src/lib/styles/tokens.css` から1行目（原本名の説明コメント）を除いた内容と `diff` で差分なし（SHA-256 `fca4341dc36a5c12…`）
 - brand: git履歴（5c87d89 の親）の原本。`assets/design/ondemandclass_mspp_converter_brand.md` と `cmp` で一致（SHA-256 `829993a2f74a97fa…`）
+- icon_master: git履歴（5c87d89 の親）の原本。`assets/design/ondemandclass_mspp_converter_icon_master.svg` と `cmp` で一致（SHA-256 `637ff6931ab2feb3…`）
 - 値は変更していない。`src/`・`assets/design/` の配置物は変更していない
 
-## 未対応
+## 結果
 
-- `ondemandclass_mspp_converter_icon_master_v4.svg` は置いていない（今回の指示は tokens と brand のみ）。`specs/` を1つの版でそろえるには、マスターSVGも置く必要がある。リリース準備（アイコン一式がマスターSVGから生成されたものであることの確認）でも参照するため、ユーザーの判断を仰ぐ
+`specs/` はスペックシートとデザインアセット3点がすべて `_v4` でそろった。
