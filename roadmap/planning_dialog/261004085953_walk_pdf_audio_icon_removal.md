@@ -179,10 +179,19 @@ v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リ�
     - 依存: Cargo は `tauri`・`tauri-plugin-opener`・`serde`・`serde_json`・`quick-xml`・`tempfile`・`zip` だけ。npm の本番依存は `@tauri-apps/api`・`@tauri-apps/plugin-opener` だけ（`fflate` は `scripts/make_samples.ts` 用の devDependency）。capabilities は `core:default` と `opener:allow-reveal-item-in-dir` だけで、URLを開く権限はない
     - ビルド済みの `build/` 内のURLは、Svelte のエラーメッセージ用の `https://svelte.dev/e/…` という文字列と XHTML 名前空間だけ（通信には使われない）
     - 参考: `tauri.conf.json` の `security.csp` は `null`（テンプレートの既定）。今回は通信するコードがないため合否には影響しない
-- [ ] W6-12 【ユーザー】リリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、W6-1と同様に pptx・ppsx の両方を変換できることを確認する
+- [x] W6-12 【ユーザー】リリースビルドの実行ファイルを、同じフォルダに `app.settings.json` を置いた状態で起動し、W6-1と同様に pptx・ppsx の両方を変換できることを確認する
   - 依存: T6-4
   - W6-1 の成果物が残っている場合は、上書き確認で「上書きする」を選んでよい
-- [ ] W6-13 【エージェント】コードを検索し、コンポーネント内で色・影・角丸・余白が直接の値（`#xxxxxx`、`rgba(...)`、`px` の角丸・影等）で書かれておらず、`tokens.css` のトークン経由になっていることを確認する。また `src/lib/styles/tokens.css` の値が原本と一致することを差分で確認する
+  - 実施メモ: ユーザー報告により完了（リリースビルドで確認、問題なし）
+- [x] W6-13 【エージェント】コードを検索し、コンポーネント内で色・影・角丸・余白が直接の値（`#xxxxxx`、`rgba(...)`、`px` の角丸・影等）で書かれておらず、`tokens.css` のトークン経由になっていることを確認する。また `src/lib/styles/tokens.css` の値が原本と一致することを差分で確認する
+  - 実施メモ（261004）: 合格
+    - 原本との差分: 原本は `specs/` になく（T1-9 の実施メモの「要確認」のとおり）、リポジトリ直下から移動済みのため、git 履歴から取り出した（原本 `ondemandclass_mspp_converter_tokens.css` を最後に含むコミットは 5c87d89 の親。原本を変更したコミットは追加の b4ada72 と移動の 5c87d89 だけ）。`src/lib/styles/tokens.css` の1行目（原本名の説明コメント）を除いた内容と比べ、`diff` で差分なし、SHA-256 も一致（5,179バイト）。`tokens.css` の変更履歴は配置時の 5c87d89 だけ
+    - 検索対象: `src/` 配下の `.svelte` と `.css` のうち `tokens.css` 以外の25ファイル（画面6・基本部品7・アイコン7・`base.css`・ルート2・開発用ページ2）
+    - 色: `#xxxxxx`・`rgb(a)`・`hsl(a)`・`oklch` と色名の直書きは0件。アイコンのSVGの `fill`/`stroke` は `currentColor` か `none` だけ。`style` 属性による直書きもなし
+    - 影: `box-shadow` は `base.css` の `var(--shadow-sm|md|lg)` と `none` だけ（Card の `transition: box-shadow …` は値ではない）
+    - 角丸: `border-radius` は `var(--radius-sm|md|lg|full)` と `inherit`（状態レイヤーが親の角丸を引き継ぐもの）だけ
+    - 余白: `padding`・`margin`・`gap`・位置指定は、すべて `var(--space-*)` か `0`／`auto`。例外は `base.css` の `.visually-hidden` の `margin: -1px`（定型値。T5-8 の実施メモどおり）
+    - 対象外として確認した `px`（`tokens.css` に寸法・線の太さのトークンはない）: ボタン・行・チップの最小寸法（40px・64px・32px。W5-10 の要件）、ドロップゾーンの最小高さ 200px、枠線とBannerの帯の太さ（1px・4px）、フォーカスリングの `2px`（スペック3章で固定）、レイアウトの最大幅（720px、Dialog の 560px）、開発用ページのレイアウト値
 
 ## Phase 7: 音声結合の進捗表示の検証
 - W7-1〜W7-3 → Phase 8 の W8-1〜W8-3 へ移動（`261003115642_change_audio_progress.md`）。現在は Phase 10 の W10-1〜W10-3
