@@ -613,9 +613,18 @@ v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リ�
     - ページ数の数え方の単体テスト `page_count_ignores_page_tree` も同じファイルに置いた（`#[ignore]` なし）
     - 実行（サンドボックス外、`SOFFICE_PATH=C:\Program Files\LibreOffice\program\soffice.exe`、`--include-ignored`）: 2件成功（35.3秒）。pptx・ppsx とも 33ページ・音声図形33個を除去・PDF 2,306,490バイト（変更前の `samples/derived/pptx/original_slides.pdf` は 84,785,720バイト）
     - `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 155件・`pdf_derived` 1件（1件ignore）・`pdf_source` 11件・`pptx_extract` 9件すべて成功
-- [ ] T9-6 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
+- [x] T9-6 【エージェント】静的チェック・全テストを実行し、`bun run tauri build` でリリースビルドを作り直す
   - 依存: T9-5
   - `cargo fmt --check`・`cargo clippy --all-targets`・`cargo test`・`cargo test -- --ignored`（ffmpeg・soffice の環境変数つき）・`bun run check`・`bun run test`
+  - 実施メモ（実行結果 261004092648）: すべて合格
+    - `bun run check`: エラー0・警告0（371ファイル）
+    - `bun run test`: 5ファイル61件すべて成功
+    - `cargo fmt --check`: 差分なし。`cargo clippy --all-targets`: 警告・エラーなし
+    - `cargo test`: lib 155件・`pdf_derived` 1件・`pdf_source` 11件・`pptx_extract` 9件すべて成功
+    - `cargo test -- --ignored`（サンドボックス外。`FFMPEG_PATH`・`FFPROBE_PATH` は WinGet Links、`SOFFICE_PATH` は `C:\Program Files\LibreOffice\program\soffice.exe`）: `concat_integration` 9件（9.13秒）・`derived_samples` 6件（1.75秒）・`pdf_derived` 1件（28.82秒）すべて成功
+    - `bun run tauri build`（サンドボックス外）: 終了コード0（全体271秒、Rustのreleaseビルド3分48秒）。警告は W1-1・T6-4・T7-11 と同じ `linker_messages`（MSVCリンカーの情報メッセージ）1件のみ
+    - 生成物（いずれも今回のビルドで更新）: `src-tauri/target/release/ondemandclass_mspp_converter.exe`（5,057,536バイト。T7-11 時点は4,820,992バイト）、`bundle/msi/ondemandclass_mspp_converter_0.1.0_x64_en-US.msi`（2.31 MiB）、`bundle/nsis/ondemandclass_mspp_converter_0.1.0_x64-setup.exe`（1.59 MiB）
+    - リリースビルドでの実機確認は W9-5（【ユーザー】）で行う
 
 ## Phase 10: リリース準備
 - [ ] T10-1 【エージェント】`CHANGELOG.md`（Keep a Changelog形式）を作成し、`0.1.0` の内容を書く。`package.json`・`tauri.conf.json`・`Cargo.toml` のバージョン表記が `0.1.0` でそろっていることを確認する
