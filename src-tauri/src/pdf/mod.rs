@@ -1,5 +1,7 @@
 //! LibreOffice（soffice）による pptx/ppsx の PDF 変換。
 
+pub mod strip_audio;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

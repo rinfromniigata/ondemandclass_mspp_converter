@@ -573,10 +573,16 @@ v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リ�
 - [x] T9-1 【エージェント】スペックシート v4 を作成する（`run_soffice_convert` の音声図形の除去、9章のエッジケース、13章の受け入れ基準）
   - 実施メモ（261004）: 仕様変更の承認後の手順として作成。`specs/ondemandclass_mspp_converter_SPEC_v4.md`。v3 は `archived/` へ移動。デザインアセット（`assets/design/`）は変更なし
   - 方式（音声の `p:pic` を一時コピーから削除）の選定根拠は change の3章（サンプルで soffice を実行して比較した結果）
-- [ ] T9-2 【エージェント】`pdf/strip_audio.rs` に `strip_audio_shapes` を実装し、単体テストを書く
+- [x] T9-2 【エージェント】`pdf/strip_audio.rs` に `strip_audio_shapes` を実装し、単体テストを書く
   - 依存: T9-1
   - imple 3.7.0・6.1。判定の方針（ローカル名＋親要素の確認、AlternateContent の扱い）は `pptx/slide.rs` に合わせる
   - 音声1つ・複数、音声なし、動画のみ、音声と動画の混在、AlternateContent の両分岐、`nvPr` 以外の同名要素、除去後のXMLが読めること、壊れたXML
+  - 実施メモ（実行結果 261004090827）:
+    - ユーザーの指示により、W7（Phase 7 の検証）の通過前に着手した（T9-2 は Phase 7 のコードに依存しない）
+    - quick-xml 0.42 の `Reader::buffer_position`（直前のイベントの終端）を `read_event` の直前に取り、`pic` の開始タグの `<` から終了タグの直後までの範囲を記録する。`audioFile` は親が `pic/nvPicPr/nvPr` の順のときだけ音声とみなす（空要素・開始タグの両方）。`AlternateContent` は分岐を読み飛ばさず、各分岐の `pic` をそれぞれ判定する
+    - 範囲の計算は `audio_shape_ranges`（`pub(crate)`）に分けた。T9-3 の `write_pdf_source` が除去数を数えるために使う（公開インターフェースは imple どおり `strip_audio_shapes` のみ）
+    - 単体テスト13件: 実ファイルと同じ形の音声1つ（timing の `spTgt` は残る・`parse_slide` で読める）、複数、グループ内、音声なし・動画のみ（`None`）、音声と動画の混在、AlternateContent の両分岐、`nvPr` 以外の同名要素3種、開始タグ形式の `audioFile`、別プレフィックス、空白・日本語の保持、範囲が要素全体であること、壊れたXML2種
+    - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 154件（141→154）・`pptx_extract` 9件すべて成功
 - [ ] T9-3 【エージェント】`write_pdf_source` を実装し、`PptxBuilder` で作った入力でテストを書く
   - 依存: T9-2
   - imple 3.7.0・6.1。zip crate の `raw_copy_file` 等は `Cargo.lock` の版の docs.rs で確認してから使う
