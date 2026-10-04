@@ -583,10 +583,17 @@ v4（261004の変更）で追加した項目は T9-1〜T9-6（Phase 9）。リ�
     - 範囲の計算は `audio_shape_ranges`（`pub(crate)`）に分けた。T9-3 の `write_pdf_source` が除去数を数えるために使う（公開インターフェースは imple どおり `strip_audio_shapes` のみ）
     - 単体テスト13件: 実ファイルと同じ形の音声1つ（timing の `spTgt` は残る・`parse_slide` で読める）、複数、グループ内、音声なし・動画のみ（`None`）、音声と動画の混在、AlternateContent の両分岐、`nvPr` 以外の同名要素3種、開始タグ形式の `audioFile`、別プレフィックス、空白・日本語の保持、範囲が要素全体であること、壊れたXML2種
     - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 154件（141→154）・`pptx_extract` 9件すべて成功
-- [ ] T9-3 【エージェント】`write_pdf_source` を実装し、`PptxBuilder` で作った入力でテストを書く
+- [x] T9-3 【エージェント】`write_pdf_source` を実装し、`PptxBuilder` で作った入力でテストを書く
   - 依存: T9-2
   - imple 3.7.0・6.1。zip crate の `raw_copy_file` 等は `Cargo.lock` の版の docs.rs で確認してから使う
   - 音声図形の除去、ほかのエントリと音声のないスライドが同じバイト列で残ること、エントリの並び、入力ファイルが変更されないこと
+  - 実施メモ（実行結果 261004091310）:
+    - zip 8.6.0 の API はレジストリのソースで確認した。エントリはインデックス順に処理し、スライド以外と音声のないスライドは `by_index_raw` → `ZipWriter::raw_copy_file`（圧縮済みのまま、CRC等のメタデータも引き継ぐ）、音声を除いたスライドは `start_file`（Deflated）で書き直す
+    - スライドの判定は `ppt/slides/` 直下の `slide*.xml`（`_rels` やサブフォルダ、レイアウト・ノートは対象外）
+    - 除去数を数えるため、`strip_audio.rs` 内の処理を `strip_counted`（除去後の文字列と数）に分けた。T9-2 で `pub(crate)` にした `audio_shape_ranges` は外から使わなくなったため非公開に戻した。公開インターフェースは imple どおり `strip_audio_shapes` と `write_pdf_source` のみ
+    - エラー文言は `pptx/package.rs` に合わせた（「ファイルを開けません」「pptx/ppsxとして読み込めません」「{パート} をUTF-8として読み込めません」）。XMLの解析エラーにはパート名と入力パスを付ける
+    - テストは、`PptxBuilder` が結合テスト側（`tests/common/`）にあるため `tests/pdf_source.rs` に置いた（11件）: pptx・ppsx での除去（3図形、テキスト・画面切り替え・timing・動画は残る）、コピーを `extract_from_file` で読める（4枚・音声なし・動画の警告は元と同じ）、ほかのエントリが圧縮済みバイト列・CRCとも同一でエントリの並びも同じ、入力のバイト列と更新日時が変わらない、音声のないパッケージは全エントリ同一、BOMつきスライド、スライド以外の同形XMLは書き換えない、壊れたXML（パート名・入力名つき）、UTF-8でない、zipでない、入力がない
+    - 結果: `cargo fmt --check` 差分なし、`cargo clippy --all-targets` 警告・エラーなし、`cargo test` lib 154件・`pdf_source` 11件・`pptx_extract` 9件すべて成功
 - [ ] T9-4 【エージェント】`convert_to_pdf` を、一時フォルダ内の加工済みコピー（入力と同じファイル名）を soffice に渡すように変更する
   - 依存: T9-3
   - imple 3.7。シグネチャ・コマンド層・TypeScript は変えない。既存の `pdf` の単体テストがそのまま通ること

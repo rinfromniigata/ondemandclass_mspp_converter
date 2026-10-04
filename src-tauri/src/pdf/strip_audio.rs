@@ -3,10 +3,15 @@
 //! LibreOffice は音声の `p:pic` を、再生アイコンの画像・再生用の注釈・音声データの埋め込みとして
 //! PDFに出力する。アイコンが下のテキスト・画像を覆うため、変換前に図形ごと除去する。
 
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::ops::Range;
+use std::path::Path;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::error::AppError;
 
@@ -17,10 +22,122 @@ use crate::error::AppError;
 /// - `mc:AlternateContent` の中の `p:pic` は、分岐ごとにそれぞれ判定して除去する
 /// - 動画の図形（`videoFile`）と、`p:timing` 内の `p:spTgt` は残す
 pub fn strip_audio_shapes(xml: &str) -> Result<Option<String>, AppError> {
+    Ok(strip_counted(xml)?.map(|(stripped, _)| stripped))
+}
+
+/// 入力の pptx/ppsx を `dest` に書き直し、スライドから音声の図形を除去したコピーを作る。
+/// 戻り値は除去した図形の数。
+///
+/// - エントリの並びは入力と同じにする
+/// - `ppt/slides/slide*.xml` は、音声図形があれば除去して Deflate で書き直す
+/// - それ以外のエントリと音声図形のないスライドは、再圧縮せずにそのままコピーする
+///   （音声・画像などの大きいメディアを速くコピーするため）
+/// - 入力ファイルは読むだけで変更しない
+pub fn write_pdf_source(input: &Path, dest: &Path) -> Result<usize, AppError> {
+    let file = File::open(input).map_err(|source| AppError::Io {
+        context: format!("ファイルを開けません（{}）", input.display()),
+        source,
+    })?;
+    let mut archive = ZipArchive::new(BufReader::new(file)).map_err(|e| {
+        AppError::Message(format!(
+            "pptx/ppsxとして読み込めません（{}：{e}）",
+            input.display()
+        ))
+    })?;
+    let out = File::create(dest).map_err(|source| AppError::Io {
+        context: format!("PDF変換用のコピーを作成できません（{}）", dest.display()),
+        source,
+    })?;
+    let mut writer = ZipWriter::new(BufWriter::new(out));
+    let write_error = |e: &dyn std::fmt::Display| {
+        AppError::Message(format!(
+            "PDF変換用のコピーを書き込めません（{}：{e}）",
+            dest.display()
+        ))
+    };
+    let read_error = |part: &str, e: &dyn std::fmt::Display| {
+        AppError::Message(format!(
+            "{part} を読み込めません（{}：{e}）",
+            input.display()
+        ))
+    };
+
+    let mut removed = 0;
+    for index in 0..archive.len() {
+        let name = archive
+            .name_for_index(index)
+            .map(str::to_owned)
+            .ok_or_else(|| read_error(&format!("{index}番目のエントリ"), &"名前がありません"))?;
+        if is_slide_part(&name) {
+            let xml = read_slide(&mut archive, index).map_err(|e| match e {
+                Some(e) => read_error(&name, &e),
+                None => AppError::Message(format!(
+                    "{name} をUTF-8として読み込めません（{}）",
+                    input.display()
+                )),
+            })?;
+            let counted = strip_counted(&xml)
+                .map_err(|e| AppError::Message(format!("{e}（{name}：{}）", input.display())))?;
+            if let Some((stripped, count)) = counted {
+                writer
+                    .start_file(
+                        name.as_str(),
+                        SimpleFileOptions::default()
+                            .compression_method(CompressionMethod::Deflated),
+                    )
+                    .map_err(|e| write_error(&e))?;
+                writer
+                    .write_all(stripped.as_bytes())
+                    .map_err(|e| write_error(&e))?;
+                removed += count;
+                continue;
+            }
+        }
+        let entry = archive
+            .by_index_raw(index)
+            .map_err(|e| read_error(&name, &e))?;
+        writer.raw_copy_file(entry).map_err(|e| write_error(&e))?;
+    }
+    writer
+        .finish()
+        .map_err(|e| write_error(&e))?
+        .flush()
+        .map_err(|e| write_error(&e))?;
+    Ok(removed)
+}
+
+/// `ppt/slides/` 直下の `slide*.xml`（`_rels` 等のサブフォルダは除く）
+fn is_slide_part(name: &str) -> bool {
+    name.strip_prefix("ppt/slides/").is_some_and(|file| {
+        !file.contains('/') && file.starts_with("slide") && file.ends_with(".xml")
+    })
+}
+
+/// スライドのエントリを文字列で読む。先頭のBOMは取り除く。
+/// 読めなければ `Err(Some(理由))`、UTF-8でなければ `Err(None)`
+fn read_slide<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    index: usize,
+) -> Result<String, Option<String>> {
+    let mut entry = archive.by_index(index).map_err(|e| Some(e.to_string()))?;
+    let mut bytes = Vec::new();
+    entry
+        .read_to_end(&mut bytes)
+        .map_err(|e| Some(e.to_string()))?;
+    let text = String::from_utf8(bytes).map_err(|_| None)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(stripped) => stripped.to_owned(),
+        None => text,
+    })
+}
+
+/// 除去後の文字列と除去した図形の数。該当がなければ `None`
+fn strip_counted(xml: &str) -> Result<Option<(String, usize)>, AppError> {
     let ranges = audio_shape_ranges(xml)?;
     if ranges.is_empty() {
         return Ok(None);
     }
+    let count = ranges.len();
     let mut stripped = String::with_capacity(xml.len());
     let mut cursor = 0;
     for range in ranges {
@@ -28,11 +145,11 @@ pub fn strip_audio_shapes(xml: &str) -> Result<Option<String>, AppError> {
         cursor = range.end;
     }
     stripped.push_str(&xml[cursor..]);
-    Ok(Some(stripped))
+    Ok(Some((stripped, count)))
 }
 
 /// 音声の `p:pic` の、開始タグの `<` から終了タグの `>` の直後までのバイト範囲（出現順・重なりなし）
-pub(crate) fn audio_shape_ranges(xml: &str) -> Result<Vec<Range<usize>>, AppError> {
+fn audio_shape_ranges(xml: &str) -> Result<Vec<Range<usize>>, AppError> {
     let mut reader = Reader::from_str(xml);
     // 開いている要素のローカル名
     let mut stack: Vec<String> = Vec::new();
