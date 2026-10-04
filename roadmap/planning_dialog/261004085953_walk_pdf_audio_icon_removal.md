@@ -185,7 +185,7 @@ v4（261004の変更）で追加した項目は W9-1〜W9-5（Phase 9）。リ�
   - 実施メモ: ユーザー報告により完了（リリースビルドで確認、問題なし）
 - [x] W6-13 【エージェント】コードを検索し、コンポーネント内で色・影・角丸・余白が直接の値（`#xxxxxx`、`rgba(...)`、`px` の角丸・影等）で書かれておらず、`tokens.css` のトークン経由になっていることを確認する。また `src/lib/styles/tokens.css` の値が原本と一致することを差分で確認する
   - 実施メモ（261004）: 合格
-    - 原本との差分: 原本は `specs/` になく（T1-9 の実施メモの「要確認」のとおり）、リポジトリ直下から移動済みのため、git 履歴から取り出した（原本 `ondemandclass_mspp_converter_tokens.css` を最後に含むコミットは 5c87d89 の親。原本を変更したコミットは追加の b4ada72 と移動の 5c87d89 だけ）。`src/lib/styles/tokens.css` の1行目（原本名の説明コメント）を除いた内容と比べ、`diff` で差分なし、SHA-256 も一致（5,179バイト）。`tokens.css` の変更履歴は配置時の 5c87d89 だけ
+    - 原本との差分: 原本は `specs/` になく（T1-9 の実施メモの「要確認」のとおり）、リポジトリ直下から移動済みのため、git 履歴から取り出した。この後 `specs/` に `ondemandclass_mspp_converter_tokens_v4.css`・`ondemandclass_mspp_converter_brand_v4.md` として置き直した（`261004114620_fix_specs_design_assets_restore.md`）（原本 `ondemandclass_mspp_converter_tokens.css` を最後に含むコミットは 5c87d89 の親。原本を変更したコミットは追加の b4ada72 と移動の 5c87d89 だけ）。`src/lib/styles/tokens.css` の1行目（原本名の説明コメント）を除いた内容と比べ、`diff` で差分なし、SHA-256 も一致（5,179バイト）。`tokens.css` の変更履歴は配置時の 5c87d89 だけ
     - 検索対象: `src/` 配下の `.svelte` と `.css` のうち `tokens.css` 以外の25ファイル（画面6・基本部品7・アイコン7・`base.css`・ルート2・開発用ページ2）
     - 色: `#xxxxxx`・`rgb(a)`・`hsl(a)`・`oklch` と色名の直書きは0件。アイコンのSVGの `fill`/`stroke` は `currentColor` か `none` だけ。`style` 属性による直書きもなし
     - 影: `box-shadow` は `base.css` の `var(--shadow-sm|md|lg)` と `none` だけ（Card の `transition: box-shadow …` は値ではない）
