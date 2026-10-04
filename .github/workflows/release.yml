@@ -1,0 +1,57 @@
+# v* タグのpushで Windows x64 と macOS Universal をビルドし、GitHub Releases にドラフトを作成する（imple 9章）
+# アイコンはリポジトリの src-tauri/icons/ をそのまま使い、CIでは生成しない
+# ffmpeg・LibreOffice は実行時に外部から呼ぶだけなので、CIには入れない
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+          - platform: 'macos-latest'
+            args: '--target universal-apple-darwin'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Universal ビルドには両アーキテクチャのターゲットが要る（macOS のみ）
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS は Apple の証明書を使わずアドホック署名する（Apple Silicon で「壊れている」扱いになるのを避ける）
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
+        with:
+          tauriScript: 'bun tauri'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'オンデマンドスライドコンバーター ${{ github.ref_name }}'
+          releaseBody: '変更内容は CHANGELOG.md を参照してください。使い方と必要なソフトは README.md を参照してください。'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
